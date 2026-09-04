@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research &middot; Steven M. Carr</title>
+<meta name="description" content="Research interests, funded grants, and proposals under review for Steven M. Carr: software and file-system security, program analysis, memory-hierarchy optimization, and security education.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">Steven M. Carr</a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="index.html">Home</a>
+      <a href="research.html" aria-current="page">Research</a>
+      <a href="publications.html">Publications</a>
+      <a href="teaching.html">Teaching</a>
+      <a href="service.html">Leadership &amp; Service</a>
+      <a href="cv/Steven-Carr-CV.pdf">CV (PDF)</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <h1 class="page-title">Research</h1>
+  <p class="page-subtitle">Compilers and program analysis, software security, and the tools that make both teachable.</p>
+
+  <ul class="jump">
+    <li><a href="#interests">Interests</a></li>
+    <li><a href="#projects">Projects</a></li>
+    <li><a href="#grants">Funded grants (23)</a></li>
+    <li><a href="#review">Proposals under review (4)</a></li>
+  </ul>
+
+  <section id="interests">
+    <h2>Research interests</h2>
+    <div class="card-grid">
+      <div class="card">
+        <h3>Software and system security</h3>
+        <p>Software security, file-system security, mandatory integrity controls, and access-control policy languages.</p>
+      </div>
+      <div class="card">
+        <h3>Security education</h3>
+        <p>Visualization systems and curricula that make secure coding, access control, and concurrency concepts concrete for students.</p>
+      </div>
+      <div class="card">
+        <h3>Program analysis</h3>
+        <p>Dynamic program analysis, program locality analysis, and reuse- and memory-distance measurement.</p>
+      </div>
+      <div class="card">
+        <h3>Compilers and architecture</h3>
+        <p>Memory-hierarchy optimization, high-performance computing, language run-time systems, virtualization, code generation for embedded systems, and cooperation between architecture and compilers.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="projects">
+    <h2>Selected projects</h2>
+
+    <h3>VACCS &mdash; Visualization and Analysis for C Code Security</h3>
+    <p>
+      An NSF-funded system that combines static and dynamic analysis with visualization to help
+      students see how C programs actually behave in memory &mdash; buffer overruns, integer
+      coercion, and process address-space layout &mdash; rather than only reading about them.
+      Project materials are at <a href="https://vaccsedu.org">vaccsedu.org</a>.
+    </p>
+
+    <h3>Access-control visualization tools</h3>
+    <p>
+      A family of teaching tools built with collaborators at Michigan Tech &mdash; MLSvisual
+      (multi-level security), RBACvisual (role-based access control), DTEVisual (domain type
+      enforcement), and UNIXvisual (UNIX permissions) &mdash; that let students manipulate
+      policies and immediately see the resulting authorization decisions.
+    </p>
+
+    <h3>ThreadMentor and ConcurrentMentor</h3>
+    <p>
+      A portable class library, visualization system, and user-level kernel for teaching
+      multithreaded and distributed programming, developed over more than a decade of
+      NSF-supported curriculum work.
+    </p>
+
+    <h3>Memory-hierarchy and locality optimization</h3>
+    <p>
+      Long-running work on scalar replacement, unroll-and-jam, loop transformations for data
+      locality, compiler blockability of numerical algorithms, and reuse-distance-based
+      prediction &mdash; including collaborations with Ken Kennedy, Kathryn McKinley, and
+      Chau-Wen Tseng that remain widely cited in the compiler literature.
+    </p>
+  </section>
+
+  <section id="grants">
+    <h2>Funded grants</h2>
+    <p class="muted">
+      Listed most recent first, as in the CV. NSF awards link to their public award pages on
+      nsf.gov; industry awards have no public record to link.
+    </p>
+
+    <ol class="pubs">
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2612129">Collaborative Research: CyberTraining: Pilot: Concurrent Computing Curricula for Cyber-Physical Systems</a><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; co-PIs: Zachary Asher, Radu Babiceanu &middot; Michigan Tech PI: Jean Mayo &middot; <span class="amount">$299,403 (WMU: $120,941)</span> &middot; 8/26 &ndash; 7/28</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2320951">CyberTraining: Implementation: Small: Promoting AI Readiness for Machine-Assisted Secure Data Analysis (PAIR4MASDA)</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: A. Fong &middot; co-PIs: S. Bhattacharjee, A. Gupta, K.C. Chen, S. Carr &middot; <span class="amount">$499,876</span> &middot; 8/23 &ndash; 7/27</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=2017289">CyberTraining: Pilot: Modular Experiential Learning for Secure, Safe and Reliable AI (MELSSRAI)</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: A. Fong &middot; co-PIs: S. Bhattacharjee, A. Gupta, S. Carr &middot; <span class="amount">$298,257</span> &middot; 8/20 &ndash; 7/22</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=1522883">VACCS: Visualization and Analysis for C Code Security</a><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; co-PIs: J. Mayo, C.-K. Shene, Z. Yang &middot; <span class="amount">$300,000 (WMU: $170,000)</span> &middot; 1/16 &ndash; 12/19</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=1421643">Adaptive Memory Resource Management in a Data Center &mdash; A Transfer Learning Approach</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: L. Brown &middot; co-PIs: Z. Wang, S. Carr &middot; <span class="amount">$400,000 (WMU: $100,000)</span> &middot; 9/14 &ndash; 8/17</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=1245310">Accessible Access Control</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: J. Mayo &middot; co-PIs: S. Carr, C.-K. Shene, C. Wang &middot; <span class="amount">$199,164 (WMU: $40,000)</span> &middot; 9/13 &ndash; 8/15</span>
+      </li>
+      <li>
+        <span class="pub-title">Accelerated Processor Unit (APU) Software for Convex Optimization</span><span class="role-tag pi">PI</span>
+        <span class="award">Advanced Micro Devices &middot; co-PIs: S. Nooshabadi, Z. Wang &middot; <span class="amount">$2,000</span></span>
+      </li>
+      <li>
+        <span class="pub-title">Compiler Evaluation for the PowerPC 476 Processor</span><span class="role-tag">co-PI</span>
+        <span class="award">LSI Corporation &middot; co-PIs: Steve Carr, Zhenlin Wang &middot; <span class="amount">$18,215</span> &middot; 5/10 &ndash; 8/10</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=0811427">Feedback-Directed Resource Management in Virtual Private Machines</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; co-PIs: Steve Carr, Zhenlin Wang &middot; <span class="amount">$60,000</span> &middot; 9/08 &ndash; 12/10</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=0833082">A Performance Model for Partitioned Global Address Space Languages</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: Steven R. Seidel &middot; co-PIs: Steve Carr, Zhenlin Wang &middot; <span class="amount">$70,000</span> &middot; 9/08 &ndash; 8/10</span>
+      </li>
+      <li>
+        <span class="pub-title">Compiler Development for the Agere Payload Plus Network Processor</span><span class="role-tag pi">PI</span>
+        <span class="award">Agere Systems &middot; <span class="amount">$85,267</span> &middot; 9/04 &ndash; 12/05</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=0312892">ITR: Exposing the Compiler to the Hardware: Memory Subsystem Optimizations Through Compiler/Micro-architecture Cooperation using Set Membership Information and Color Sets</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: Soner &Ouml;nder &middot; co-PI: Steve Carr &middot; <span class="amount">$280,000</span> &middot; 9/03 &ndash; 8/06</span>
+      </li>
+      <li>
+        <span class="pub-title">Compilation for the Agere APP5xx and APP7xx Family of Network Processors</span><span class="role-tag pi">PI</span>
+        <span class="award">Agere Systems &middot; <span class="amount">$62,068</span> &middot; 1/03 &ndash; 12/03</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=0209036">High-Level Optimization for DSP Architectures</a><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; <span class="amount">$249,964</span> &middot; 9/02 &ndash; 8/05</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=9952509">Concurrent Computing in an Upper-Level Computer Science Curriculum</a><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; co-PIs: Jean Mayo, C.-K. Shene &middot; <span class="amount">$299,865</span> &middot; 6/00 &ndash; 5/03</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=9870871">Code Generation for ILP Architectures with Partitioned Register Files</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: Philip H. Sweany &middot; co-PI: Steve Carr &middot; <span class="amount">$325,434</span> &middot; 7/98 &ndash; 6/02</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=9752244">Teaching Multithreaded Programming to Computer Science Undergraduates</a><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: C.-K. Shene &middot; co-PI: Steve Carr &middot; <span class="amount">$50,002</span> &middot; 3/98 &ndash; 5/99</span>
+      </li>
+      <li>
+        <span class="pub-title">Register-Bank Assignment for Distributed-Register, Instruction-Level Parallel Architectures</span><span class="role-tag">co-PI</span>
+        <span class="award">Texas Instruments &middot; PI: Philip H. Sweany &middot; co-PI: Steve Carr &middot; <span class="amount">$42,830</span> &middot; 9/97 &ndash; 8/98</span>
+      </li>
+      <li>
+        <span class="pub-title">Generating Efficient Code for Horizontal Micro-Architectures with Partitioned Register Files</span><span class="role-tag">co-PI</span>
+        <span class="award">Texas Instruments &middot; PI: Philip H. Sweany &middot; co-PI: Steve Carr &middot; <span class="amount">$23,715</span> &middot; 9/95 &ndash; 8/96</span>
+      </li>
+      <li>
+        <span class="pub-title">Hiding the Latency Between Level-1 and Level-2 Cache on the DEC Alpha 21164</span><span class="role-tag pi">PI</span>
+        <span class="award">Digital Equipment Corporation &middot; co-PI: Philip H. Sweany &middot; <span class="amount">$137,647</span> &middot; 7/95 &ndash; 8/97</span>
+      </li>
+      <li>
+        <span class="pub-title">Improving Memory Performance on the Hewlett-Packard PA-RISC</span><span class="role-tag pi">PI</span>
+        <span class="award">Hewlett-Packard Company &middot; <span class="amount">$53,480</span> &middot; 9/94 &ndash; 8/95</span>
+      </li>
+      <li>
+        <a class="pub-title" href="https://www.nsf.gov/awardsearch/showAward?AWD_ID=9409341">Improving the Cache Performance of Scientific Applications</a><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; <span class="amount">$90,984</span> &middot; 7/94 &ndash; 6/97</span>
+      </li>
+      <li>
+        <span class="pub-title">Cache-Conscious Loop Unrolling</span><span class="role-tag pi">PI</span>
+        <span class="award">Hewlett-Packard Company &middot; <span class="amount">$41,984</span> &middot; 7/93</span>
+      </li>
+    </ol>
+  </section>
+
+  <section id="review">
+    <h2>Proposals under review</h2>
+    <ol class="pubs">
+      <li>
+        <span class="pub-title">CyberAI SFS: Scholarships for Service at Western Michigan University</span><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; co-PIs: Jason Johnson, Alan Rea</span>
+      </li>
+      <li>
+        <span class="pub-title">Collaborative Research: CyberAI Innovation: Que-TRAIL &mdash; Quantitative and Evaluative Curricula for Trustworthy, Resilient, Agentic AI Integrated LLM Ecosystems</span><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: Shameek Bhattacharjee &middot; Univ. of Houston PI: Rakesh Verma</span>
+      </li>
+      <li>
+        <span class="pub-title">CyberAI Innovation: Promoting Quantum Readiness through Cooperative Open-Source Development and Empowerment for STEM (Pro QR Codes)</span><span class="role-tag">co-PI</span>
+        <span class="award">National Science Foundation &middot; PI: Guan Yue Hong &middot; co-PIs: Alvis Fong, Steve Carr</span>
+      </li>
+      <li>
+        <span class="pub-title">Collaborative Research: SaTC 2.0: RES: QueryGuard &mdash; A Cognitive SQLIA Defense System for Deep Web Databases</span><span class="role-tag pi">PI</span>
+        <span class="award">National Science Foundation &middot; Univ. of Idaho PI: Hasan Jamil</span>
+      </li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div>&copy; 2026 Steven M. Carr</div>
+    <div>
+      <a href="https://wmich.edu/computer-science/directory/carr">WMU Directory</a> &middot;
+      <a href="https://vaccsedu.org">vaccsedu.org</a> &middot;
+      <a href="mailto:steve.carr@wmich.edu">steve.carr@wmich.edu</a>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
