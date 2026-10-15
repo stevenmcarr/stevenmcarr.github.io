@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Installing SCVis</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins">
+<style>
+body,h1,h2,h3,h4,h5 {font-family: "Poppins", sans-serif}
+body {font-size:16px; background:white}
+main {max-width:820px; margin:0 auto; padding:24px 16px 48px}
+pre {background:#f4f4f4; border:1px solid #ddd; padding:10px 12px; overflow-x:auto; font-size:14px}
+code {font-family: Menlo, Consolas, monospace; font-size:0.92em}
+p code, li code {background:#f4f4f4; padding:1px 4px}
+.notice {border-left:6px solid #2196F3; background:#e9f4fe; padding:12px 16px; margin:16px 0}
+.mac {border-left:6px solid #ff9800; background:#fff5e6; padding:12px 16px; margin:16px 0}
+h2 {margin-top:36px}
+</style>
+</head>
+<body data-repo="stevenmcarr/scvis-docker">
+<main>
+<p><a href="./">&larr; Back to VACCS</a></p>
+<h1><b>Installing SCVis</b></h1>
+<hr style="width:50px;border:5px solid black" class="w3-round">
+
+<div class="notice" id="download-notice">
+  <span id="download-status">Download the latest SCVis release:</span>
+  <a id="download-link" href="https://github.com/stevenmcarr/scvis-docker/releases/latest">scvis-docker (latest release)</a>
+</div>
+
+<p>SCVis runs in two Docker containers: one holds MySQL and the SCVis web application, the other
+holds the VACCS analyzer that executes your C programs. Each time they start, they fetch the
+current source from GitHub and build it, so you always run the latest version.</p>
+
+<div class="mac">
+  <p style="margin-top:0"><b>Apple Silicon Macs (M1 and later) run SCVis in a GitHub Codespace,
+  and you need a free GitHub account.</b></p>
+  <p style="margin-bottom:0">The VACCS analyzer only works on Intel/AMD (x86_64) processors, and
+  it cannot run under the Mac's Rosetta translation. On an Apple Silicon Mac the start script
+  therefore runs SCVis on a GitHub cloud machine instead, and opens it in your browser. Intel
+  Macs, Windows PCs and Linux PCs run SCVis on your own computer and need no GitHub account.
+  To check which Mac you have, choose <i>Apple menu &gt; About This Mac</i>: it lists either a
+  <i>Chip</i> (Apple M1, M2, &hellip;) or a <i>Processor</i> (Intel). See
+  <a href="#codespace">Apple Silicon Macs: running in a Codespace</a> below.</p>
+</div>
+
+<h2>1. What you need</h2>
+<ul>
+  <li><b>Intel Mac or Linux PC:</b> nothing beyond a terminal. If Docker is missing, the start
+    script offers to install it, and asks before changing anything on your system.</li>
+  <li><b>Windows PC:</b> <b>Git Bash</b>, which comes with
+    <a href="https://git-scm.com/downloads/win">Git for Windows</a>. Run every command below in
+    Git Bash; the scripts do not run in Command Prompt or PowerShell. If Docker Desktop is
+    missing, the start script offers to install it.</li>
+  <li><b>Apple Silicon Mac:</b> a <a href="https://github.com/signup">GitHub account</a> and the
+    <a href="https://cli.github.com/">GitHub CLI</a> (<code>gh</code>). Docker is not needed on
+    your Mac.</li>
+  <li><code>curl</code> on your <code>PATH</code>. It ships with macOS, most Linux distributions
+    and Git Bash.</li>
+  <li>An internet connection.</li>
+</ul>
+
+<h2>2. Unzip the download</h2>
+<p>The download is a zip file named <code class="zip-name">scvis-docker-1.0.0.zip</code>. Unzip it
+wherever you keep software:</p>
+<ul>
+  <li><b>macOS:</b> double-click the zip in Finder.</li>
+  <li><b>Windows:</b> right-click the zip and choose <i>Extract All</i>.</li>
+  <li><b>Linux or any terminal:</b></li>
+</ul>
+<pre><code>unzip <span class="zip-name">scvis-docker-1.0.0.zip</span></code></pre>
+<p>This creates a folder named <code class="dir-name">scvis-docker-1.0.0</code>. Rename it to
+<code>scvis-docker</code>:</p>
+<pre><code>mv <span class="dir-name">scvis-docker-1.0.0</span> scvis-docker</code></pre>
+<p>The folder name matters. Docker names the SCVis database after the folder, so a fixed name
+keeps your accounts and data when you upgrade to a newer release later.</p>
+
+<h2>3. Start SCVis</h2>
+<p><b>Apple Silicon Mac:</b> do the one-time setup in
+<a href="#codespace">running in a Codespace</a> first.</p>
+<p>Open a terminal in the folder and run the start script:</p>
+<pre><code>cd scvis-docker
+scripts/run.sh</code></pre>
+<p>If you get <i>Permission denied</i> (common after extracting on Windows), run
+<code>bash scripts/run.sh</code> instead.</p>
+<p>On your own computer, the script:</p>
+<ol>
+  <li>checks that Docker and Docker Compose are installed and running, and offers to install or
+    start them if not;</li>
+  <li>picks a free port, starting at 8080;</li>
+  <li>builds and starts both containers (the first start is slow, because it compiles the
+    analyzer from source);</li>
+  <li>waits for SCVis to respond;</li>
+  <li>opens SCVis in your web browser.</li>
+</ol>
+<p>Log in with user <code>admin</code> and password <code>admin1234</code>. To use a different
+admin account, copy <code>.env.example</code> to <code>.env</code> and edit it before the first
+start; the admin account is created only once, when the database is new.</p>
+
+<h2>4. Stop SCVis</h2>
+<pre><code>scripts/stop.sh              # stop, keep the database
+scripts/stop.sh --wipe-db    # stop and delete the database</code></pre>
+<p>On an Apple Silicon Mac, stop the Codespace instead, as described below.</p>
+
+<h2>5. Upgrade to a new release</h2>
+<ol>
+  <li>Stop SCVis with <code>scripts/stop.sh</code>.</li>
+  <li>Download and unzip the new release.</li>
+  <li>Replace the contents of your <code>scvis-docker</code> folder with the new files, keeping
+    your <code>.env</code> file, and start SCVis again.</li>
+</ol>
+<p>On an Apple Silicon Mac, the Codespace runs from your fork of <code>scvis-docker</code>. To
+upgrade it, open your fork on GitHub and click <i>Sync fork</i>, then run
+<code>scripts/run.sh</code> again.</p>
+
+<h2 id="codespace">Apple Silicon Macs: running in a Codespace</h2>
+<p>A <a href="https://github.com/features/codespaces">GitHub Codespace</a> is a cloud machine
+that GitHub runs for you. Codespaces always belong to a GitHub account, so you need one; a free
+personal account works.</p>
+<ol>
+  <li><b>Install the GitHub CLI</b> from <a href="https://cli.github.com/">cli.github.com</a>,
+    or with Homebrew:
+<pre><code>brew install gh</code></pre></li>
+  <li><b>Tell the script which repository to use.</b> A downloaded zip does not record where it
+    came from, so in the <code>scvis-docker</code> folder run:
+<pre><code>cp .env.example .env
+echo "CODESPACE_REPO=stevenmcarr/scvis-docker" &gt;&gt; .env</code></pre></li>
+  <li><b>Run <code>scripts/run.sh</code>.</b> The first time, it walks you through these
+    steps and asks before each one:
+    <ul>
+      <li>signing in to GitHub, in your browser;</li>
+      <li>granting the GitHub CLI permission to manage Codespaces;</li>
+      <li>copying (forking) <code>scvis-docker</code> into your own GitHub account, because
+        GitHub only creates a Codespace from a repository you can write to.</li>
+    </ul>
+    It then creates a 4-core Codespace, starts SCVis in it, and opens it in your browser at an
+    address ending in <code>.app.github.dev</code>. The first start takes several minutes.</li>
+</ol>
+<p>The SCVis address is private: it opens only in a browser where you are signed in to GitHub.
+Later runs of <code>scripts/run.sh</code> reuse the same Codespace.</p>
+<p><b>Stopping:</b> the script prints the exact command when SCVis starts. It looks like</p>
+<pre><code>gh codespace stop -c &lt;codespace-name&gt;</code></pre>
+<p>GitHub also stops an idle Codespace on its own after a while (30 minutes by default).</p>
+<p><b>Usage limits:</b> Codespace time comes out of the free monthly Codespaces allowance on
+your GitHub account, and a 4-core Codespace uses it four times as fast as the smallest machine.
+Stop the Codespace when you are done to make the allowance last. You can see your usage at
+<a href="https://github.com/settings/billing">github.com/settings/billing</a>.</p>
+
+<h2>Optional: web mode</h2>
+<p>On your own computer, <code>scripts/run.sh web</code> serves SCVis over HTTPS with its own
+self-signed certificate, so your browser shows a certificate warning. The default mode uses
+plain HTTP and shows no warning. Web mode is not available in a Codespace.</p>
+
+<h2>Windows notes</h2>
+<ul>
+  <li>If Docker Desktop is not installed, the start script offers to install it with
+    <code>winget</code>. After it installs, log out and back in (or restart) if Windows asks you
+    to, then run <code>scripts/run.sh</code> again.</li>
+  <li>Docker Desktop needs WSL2 enabled. If Docker Desktop does not finish starting, open it,
+    complete any setup prompts, and run <code>scripts/run.sh</code> again.</li>
+</ul>
+
+<p class="w3-small" style="margin-top:40px">Full technical details are in the
+<a href="https://github.com/stevenmcarr/scvis-docker">scvis-docker repository</a>.</p>
+</main>
+
+<script src="install.js"></script>
+</body>
+</html>

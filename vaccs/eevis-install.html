@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Installing EEVis</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins">
+<style>
+body,h1,h2,h3,h4,h5 {font-family: "Poppins", sans-serif}
+body {font-size:16px; background:white}
+main {max-width:820px; margin:0 auto; padding:24px 16px 48px}
+pre {background:#f4f4f4; border:1px solid #ddd; padding:10px 12px; overflow-x:auto; font-size:14px}
+code {font-family: Menlo, Consolas, monospace; font-size:0.92em}
+p code, li code {background:#f4f4f4; padding:1px 4px}
+.notice {border-left:6px solid #2196F3; background:#e9f4fe; padding:12px 16px; margin:16px 0}
+h2 {margin-top:36px}
+</style>
+</head>
+<body data-repo="stevenmcarr/eevis-docker">
+<main>
+<p><a href="./">&larr; Back to VACCS</a></p>
+<h1><b>Installing EEVis</b></h1>
+<hr style="width:50px;border:5px solid black" class="w3-round">
+
+<div class="notice" id="download-notice">
+  <span id="download-status">Download the latest EEVis release:</span>
+  <a id="download-link" href="https://github.com/stevenmcarr/eevis-docker/releases/latest">eevis-docker (latest release)</a>
+</div>
+
+<p>EEVis runs on your own computer inside a single Docker container. The container holds MySQL,
+the EEVis web application, and (optionally) nginx. Each time it starts, it fetches the current
+EEVis source from GitHub and builds it, so you always run the latest version of the application.</p>
+
+<h2>1. What you need</h2>
+<ul>
+  <li><b>macOS or Linux:</b> nothing beyond a terminal. If Docker is missing, the start script
+    offers to install it, and asks before changing anything on your system.</li>
+  <li><b>Windows:</b> <b>Git Bash</b>, which comes with
+    <a href="https://git-scm.com/downloads/win">Git for Windows</a>. Run every command below in
+    Git Bash; the scripts do not run in Command Prompt or PowerShell. If Docker Desktop is
+    missing, the start script offers to install it.</li>
+  <li><code>curl</code> on your <code>PATH</code>. It ships with macOS, most Linux distributions
+    and Git Bash.</li>
+  <li>An internet connection the first time you start EEVis.</li>
+</ul>
+
+<h2>2. Unzip the download</h2>
+<p>The download is a zip file named <code class="zip-name">eevis-docker-1.0.0.zip</code>. Unzip it
+wherever you keep software:</p>
+<ul>
+  <li><b>macOS:</b> double-click the zip in Finder.</li>
+  <li><b>Windows:</b> right-click the zip and choose <i>Extract All</i>.</li>
+  <li><b>Linux or any terminal:</b></li>
+</ul>
+<pre><code>unzip <span class="zip-name">eevis-docker-1.0.0.zip</span></code></pre>
+<p>This creates a folder named <code class="dir-name">eevis-docker-1.0.0</code>. Rename it to
+<code>eevis-docker</code>:</p>
+<pre><code>mv <span class="dir-name">eevis-docker-1.0.0</span> eevis-docker</code></pre>
+<p>The folder name matters. Docker names the EEVis database after the folder, so a fixed name
+keeps your accounts and data when you upgrade to a newer release later.</p>
+
+<h2>3. Start EEVis</h2>
+<p>Open a terminal in the folder and run the start script:</p>
+<pre><code>cd eevis-docker
+scripts/run.sh</code></pre>
+<p>If you get <i>Permission denied</i> (common after extracting on Windows), run
+<code>bash scripts/run.sh</code> instead.</p>
+<p>The script:</p>
+<ol>
+  <li>checks that Docker and Docker Compose are installed and running, and offers to install or
+    start them if not;</li>
+  <li>picks a free port, starting at 8080;</li>
+  <li>builds and starts the container (the first start takes several minutes);</li>
+  <li>waits for EEVis to respond;</li>
+  <li>opens EEVis in your web browser.</li>
+</ol>
+<p>Log in with user <code>admin</code> and password <code>admin123</code>. To use a different
+admin account, copy <code>.env.example</code> to <code>.env</code> and edit it before the first
+start; the admin account is created only once, when the database is new.</p>
+
+<h2>4. Stop EEVis</h2>
+<pre><code>scripts/stop.sh              # stop, keep the database
+scripts/stop.sh --wipe-db    # stop and delete the database</code></pre>
+
+<h2>5. Upgrade to a new release</h2>
+<ol>
+  <li>Stop EEVis with <code>scripts/stop.sh</code>.</li>
+  <li>Download and unzip the new release.</li>
+  <li>Replace the contents of your <code>eevis-docker</code> folder with the new files, keeping
+    your <code>.env</code> file, and start EEVis again.</li>
+</ol>
+
+<h2>Optional: web mode</h2>
+<p>To serve EEVis through nginx, closer to a real deployment, start it with:</p>
+<pre><code>scripts/run.sh web</code></pre>
+
+<h2>Windows notes</h2>
+<ul>
+  <li>If Docker Desktop is not installed, the start script offers to install it with
+    <code>winget</code>. After it installs, log out and back in (or restart) if Windows asks you
+    to, then run <code>scripts/run.sh</code> again.</li>
+  <li>Docker Desktop needs WSL2 enabled. If Docker Desktop does not finish starting, open it,
+    complete any setup prompts, and run <code>scripts/run.sh</code> again.</li>
+</ul>
+
+<p class="w3-small" style="margin-top:40px">Full technical details are in the
+<a href="https://github.com/stevenmcarr/eevis-docker">eevis-docker repository</a>.</p>
+</main>
+
+<script src="install.js"></script>
+</body>
+</html>
