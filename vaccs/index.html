@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<style>
+.header-pic {
+    max-width: 100%
+}
+figcaption {
+  background-color: white;
+  color: black;
+  font-style: italic;
+  padding: 2px;
+  text-align: center;
+  font-size: small;
+}
+</style>
+<img src="pics/header-cropped.jpg" class="header-pic">
+<head>
+<title>Visualization and Analysis for C Code Security (VACCS)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins">
+<style>
+body,h1,h2,h3,h4,h5 {font-family: "Poppins", sans-serif}
+body {font-size:16px;}
+.w3-half img{margin-bottom:-6px;margin-top:16px;opacity:0.8;cursor:pointer}
+.w3-half img:hover{opacity:1}
+</style>
+</head>
+<body>
+
+
+<!-- Sidebar/menu -->
+<nav class="w3-sidebar w3-blue w3-collapse w3-top w3-large w3-padding" style="z-index:3;width:300px;font-weight:bold;" id="mySidebar"><br>
+  <a href="javascript:void(0)" onclick="w3_close()" class="w3-button w3-hide-large w3-display-topleft" style="width:100%;font-size:22px">Close Menu</a>
+  <div class="w3-container">
+    <h3 class="w3-padding-64"><b>Visualization and Analysis for C Code Security</h3>
+  </div>
+  <div class="w3-bar-block">
+    <a href="#" onclick="w3_close()" class="w3-bar-item w3-button w3-hover-white">Home</a> 
+    <a href="#overview" onclick="w3_close()" class="w3-bar-item w3-button w3-hover-white">Overview</a> 
+    <a href="#integer-representation" onclick="w3_close()" class="w3-bar-item w3-button w3-hover-white">Integer Representation</a> 
+    <a href="#expression-evaluation" onclick="w3_close()" class="w3-bar-item w3-button w3-hover-white">Expression Evaluation</a> 
+    <a href="#program-execution" onclick="w3_close()" class="w3-bar-item w3-button w3-hover-white">Program Address Space</a>
+    <a href="#contact" onclick="w3_close()" class="w3-bar-item w3-button w3-hover-white">Contact</a>
+  </div>
+</nav>
+
+
+<!-- Top menu on small screens -->
+<header class="w3-container w3-top w3-hide-large w3-blue w3-xlarge w3-padding">
+  <a href="javascript:void(0)" class="w3-button w3-blue w3-margin-right" onclick="w3_open()">☰</a>
+  <span>VACCS</span>
+</header>
+
+<!-- Overlay effect when opening sidebar on small screens -->
+<div class="w3-overlay w3-hide-large" onclick="w3_close()" style="cursor:pointer" title="close side menu" id="myOverlay"></div>
+
+<!-- !PAGE CONTENT! -->
+<div class="w3-main" style="margin-left:340px;margin-right:40px">
+<!---  <div class="w3-container" id="header" style="margin-top:75px">
+<img src="pics/header.jpg" alt="HTML5 Icon" >
+</div>
+--->
+  <!-- Header -->
+  <div class="w3-container" style="margin-top:10px" id="overview">
+    <h1 class="w3-jumbo"><b>VACCS</b></h1>
+    <h1 class="w3-xxlarge w3-text-black"><b>Overview.</b></h1>
+    <hr style="width:50px;border:5px solid black" class="w3-round">
+    <p>The C language is commonly used for low-level programs like operating systems. When a programmer does not understand how their C program executes, they can easily introduce vulnerabilities into their code. The VACCSVisual system helps students learn how to develop more secure and robust C programs through a deeper understanding of the execution of their programs.</p>
+
+  <p>The system is comprised of two components: Integer Representation and Expression Evaluation.  See below. </p>
+  </div>
+  
+  
+  <!-- INTEGER REPRESENTATION -->
+  <div class="w3-container" id="integer-representation" style="margin-top:75px">
+  <div>
+    <h1 class="w3-xxlarge w3-text-black"><b>Integer Representation.</b></h1>
+    <hr style="width:50px;border:5px solid black" class="w3-round">
+    <p>The Integer Representation tool shows the underlying representation of an integer variable and the effect on the representation and decimal value of the variable after a conversion.   
+    </p>
+ <a href="zip/irvis-docker.zip" class="w3-xlarge w3-text-black"> Download IRVis</a>
+  </div>
+  
+  <!-- Photo grid (modal) -->
+  <!--- <div class="w3-row-padding">--->
+  <div class="w3-content">
+    <div class="w3-third">
+   <figure>
+      <img src="pics/truncate-l2s.png" style="width:100%" onclick="onClick(this)" alt="Big Endian to Little Endian">
+    </figure>
+   <figcaption> Big Endian to Little Endian Conversion in IRVis. Click to enlarge.</figcaption>
+    </div>
+
+    <div class="w3-third">
+   <figure>
+     <img src="pics/signextend-s2l.png" style="width:100%" onclick="onClick(this)" alt="Sign Extension">
+    </figure>
+  <figcaption> Conversion using Sign Extension in IRVis. Click to enlarge.</figcaption>
+    </div>
+    </div>
+
+  <!-- Modal for full size images on click-->
+  <div id="modal01" class="w3-modal w3-black" style="padding-top:0" onclick="this.style.display='none'">
+    <span class="w3-button w3-black w3-xxlarge w3-display-topright">×</span>
+    <div class="w3-modal-content w3-animate-zoom w3-center w3-transparent w3-padding-64">
+      <img id="img01" class="w3-image">
+      <p id="caption"></p>
+    </div>
+  </div>
+</div>
+  
+  <!-- EXPRESSION EVALUATION -->
+  <div class="w3-container" id="expression-evaluation" style="margin-top:75px">
+  <div>
+    <h1 class="w3-xxlarge w3-text-black"><b>Expression Evaluation.</b></h1>
+    <hr style="width:50px;border:5px solid black" class="w3-round">
+    <p>The Expression Evaluation tool shows the coercions that take place within an equation of integer variables.  The coercions are shown step-wise and the types and decimal values of each variable before and after a coercion are shown.
+    </p>
+ <a href="zip/eevis-docker.zip" class="w3-xlarge w3-text-black"> Download EEVis</a>
+  </div>
+
+  <!-- Photo grid (modal) -->
+  <div class="w3-content">
+<!---    <div class="w3-half">--->
+     <div class="w3-third">
+     <figure>
+      <img src="pics/eeEx1.jpg" style="width:100%" onclick="onClick(this)" alt="Mixed Type Equation">
+      </figure>
+      <figcaption> Mixed Type Equation in EEVis. Click to enlarge.</figcaption>
+    </div>
+    <div class="w3-third">
+    <figure>
+     <img src="pics/convflowchart.jpg" style="width:100%" onclick="onClick(this)" alt="Coercion Flowchart">
+      </figure>
+      <figcaption> Flowchart for Integer Conversion in EEVis. Click to enlarge.</figcaption>
+    </div>
+    </div>
+
+  <!-- Modal for full size images on click-->
+  <div id="modal01" class="w3-modal w3-black" style="padding-top:0" onclick="this.style.display='none'">
+    <span class="w3-button w3-black w3-xxlarge w3-display-topright">×</span>
+    <div class="w3-modal-content w3-animate-zoom w3-center w3-transparent w3-padding-64">
+      <img id="img01" class="w3-image">
+      <p id="caption"></p>
+    </div>
+  </div>
+</div>
+
+ 
+  <!-- PROGRAM ADDRESS SPACE -->
+  <div class="w3-container" id="program-execution" style="margin-top:75px">
+    <h1 class="w3-xxlarge w3-text-black"><b>Program Address Space.</b></h1>
+    <hr style="width:50px;border:5px solid black" class="w3-round">
+    <p>The Program Address Space depicts memory for an executing process.  The visulization shows sections of the process address space and the changes to memory as the program is executed stepwise. </p>
+ <a href="zip/scvis-docker.zip" class="w3-xlarge w3-text-black"> Download SCVis</a>
+  </div>
+
+ <!-- DOWNLOADS -->
+    <!--
+  <div class="w3-container" id="downloads" style="margin-top:75px">
+    <h1 class="w3-xxlarge w3-text-black"><b>Downloads.</b></h1>
+    <hr style="width:50px;border:5px solid black" class="w3-round">
+    <p>Download the software</p>
+  </div>
+  -->
+  <!-- CONTACT -->
+ <div class="w3-container" id="contact" style="margin-top:75px">
+    <h1 class="w3-xxlarge w3-text-black"><b>Contact.</b></h1>
+    <hr style="width:50px;border:5px solid black" class="w3-round">
+    <p> Need help or have feedback?  Use the form below or send email directly to: steve.carr@wmich.edu. We welcome feedback and suggestions for new features!  </p>
+<form action="mailto:steve.carr@wmich.edu?cc:jmayo@mtu.edu&subject=VACCS%20Feedback" method="post" enctype="text/plain">
+Your name:<br>
+<input type="text" name="name"><br>
+E-mail at which we can contact you:<br>
+<input type="text" name="email"><br>
+Comment:<br>
+<input type="text" name="comment" size="50"><br><br>
+<input type="submit" value="Send">
+<input type="reset" value="Reset">
+</form>
+
+<!-- End page content -->
+</div>
+
+<!-- W3.CSS Container -->
+<div class="w3-light-grey w3-container w3-padding-32" style="margin-top:75px"><p> This work was supported by NSF Grants DGE-1523017 AND DGE-1522883. </p></div>
+<script>
+// Script to open and close sidebar
+function w3_open() {
+  document.getElementById("mySidebar").style.display = "block";
+  document.getElementById("myOverlay").style.display = "block";
+}
+ 
+function w3_close() {
+  document.getElementById("mySidebar").style.display = "none";
+  document.getElementById("myOverlay").style.display = "none";
+}
+
+// Modal Image Gallery
+function onClick(element) {
+  document.getElementById("img01").src = element.src;
+  document.getElementById("modal01").style.display = "block";
+  var captionText = document.getElementById("caption");
+  captionText.innerHTML = element.alt;
+}
+</script>
+
+</body>
+</html>
