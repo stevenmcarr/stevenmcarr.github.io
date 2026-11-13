@@ -195,7 +195,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           <button class="btn primary sm" id="lvMalloc">Run</button>
         </div>
         <div class="lvars" id="lvVars"></div>
-        <label class="opt"><input type="checkbox" id="lvMerge" checked> Merge free neighbours on <code>free</code></label>
+        <label class="opt"><input type="checkbox" id="lvMerge" checked> Merge free neighbors on <code>free</code></label>
         <div class="controls" style="margin-top:12px">
           <button class="btn" id="lvReset">Reset heap</button>
           <button class="btn" id="lvDemo" title="Load the slide 14 setup">Load slide 14 setup</button>
@@ -481,7 +481,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     `free(p);`,
     `free(s);`,
     `free(r);`,
-    `<span class="cm">// the allocator merges neighbours</span>`,
+    `<span class="cm">// the allocator merges neighbors</span>`,
     `${K("char")} *t = malloc(80);`,
     `${K("char")} *u = malloc(200);`,
   ];
@@ -522,7 +522,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       title: "Free all three: three free blocks side by side",
       msg: "Now <code>p</code>, <code>s</code> and <code>r</code> are freed (and <code>q</code> still dangles). There are 32 + 48 + 32 bytes free, but as three separate pieces. The largest request any one of them could satisfy is 40 bytes." },
     { lines: [13], ops: (H) => coalesce(H), zoom: "merged",
-      title: "Free neighbours merge",
+      title: "Free neighbors merge",
       msg: "Adjacent free blocks are joined into one free block of <span class=\"math\">32 + 48 + 32 = 112</span> bytes, with one header. Without merging, the heap would fill with small fragments that no request fits. All four pointers now dangle into it." },
     { lines: [14], ops: (H) => malloc(H, "t", 80), zoom: "t",
       title: "A request none of the three could hold",
@@ -618,7 +618,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     act(`free(${esc(name)});`, () => {
       const r = free(L, name);
       if (r.kind === "null") { ltitle = "free(NULL) does nothing"; lmsg = "The C standard defines <code>free(NULL)</code> as a no-op. That is why <code>free(p); p = NULL;</code> makes a second free harmless."; return { cm: "no-op" }; }
-      if (r.kind === "uninit") { ltitle = `${name} was never set`; lmsg = "Freeing an uninitialised pointer is undefined behaviour. Not run."; return false; }
+      if (r.kind === "uninit") { ltitle = `${name} was never set`; lmsg = "Freeing an uninitialized pointer is undefined behavior. Not run."; return false; }
       if (r.kind === "double") { ltitle = "Double free: the program is killed"; lmsg = `That block is already on a free list. glibc checks for this simple case and aborts. Without the check it would go on the list twice, and the next two <code>malloc</code>s of that size would both get it. Press <b>Reset heap</b> to start again.`; return { cm: "abort", bad: true }; }
       if (r.kind === "invalid") { ltitle = "Not the start of a block"; lmsg = "free() needs exactly what malloc returned. glibc aborts. Press <b>Reset heap</b>."; return { cm: "abort", bad: true }; }
       lsel = blockAt(L, user(r.b)) ? blockAt(L, user(r.b)).chunk : null;
@@ -628,8 +628,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         return { cm: `frees ${r.victim}'s block!`, bad: true };
       }
       ltitle = `Block ${sh(user(r.b))} is free`;
-      lmsg = `It goes onto the free list for its size. <code>${name}</code> still holds <code>${hex(L.vars[name])}</code>, so it is now dangling. Write <code>${name} = NULL</code> to be safe.` + (r.merged ? ` It also merged with ${r.merged === 1 ? "a free neighbour" : r.merged + " free neighbours"}.` : "");
-      return { cm: r.merged ? "merged with neighbour" : null };
+      lmsg = `It goes onto the free list for its size. <code>${name}</code> still holds <code>${hex(L.vars[name])}</code>, so it is now dangling. Write <code>${name} = NULL</code> to be safe.` + (r.merged ? ` It also merged with ${r.merged === 1 ? "a free neighbor" : r.merged + " free neighbors"}.` : "");
+      return { cm: r.merged ? "merged with neighbor" : null };
     });
   }
 
@@ -646,7 +646,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function liveWrite(name, text) {
     act(`strcpy(${esc(name)}, ${S(quote(text))});`, () => {
       const r = strcpy(L, name, text);
-      if (r.kind === "uninit") { ltitle = `${name} was never set`; lmsg = "Writing through an uninitialised pointer is undefined behaviour. Not run."; return false; }
+      if (r.kind === "uninit") { ltitle = `${name} was never set`; lmsg = "Writing through an uninitialized pointer is undefined behavior. Not run."; return false; }
       if (r.kind === "null") { ltitle = "Writing through NULL"; lmsg = "Address 0 is unmapped, so the program crashes at once. Press <b>Reset heap</b>."; return { cm: "segfault", bad: true }; }
       if (r.kind === "overflow") { ltitle = "That would overflow the block"; lmsg = `${quote(text)} needs ${r.len} bytes including the <code>\\0</code>, and only ${r.room} fit. A real <code>strcpy</code> would keep going into the next block's header. Not run.`; return false; }
       lsel = r.b.chunk;

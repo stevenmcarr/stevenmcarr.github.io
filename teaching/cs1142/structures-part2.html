@@ -540,7 +540,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       { code: "misuse", top: 3, err: "assignment of member 'gpa' in read-only object", focus: ["bad"], title: "Why const?",
         msg: "<code>s</code> is <code>const</code>, so <code>&amp;s[i]</code> is a <code>const Student *</code>. Returning a plain <code>Student *</code> would need a cast that throws away the promise <code>best</code> made. With <code>const</code> in the return type, the compiler stops the caller from changing a grade through <code>top</code>. It also lets <code>best</code> accept an array the caller declared <code>const</code>." },
       { code: "sol", frame: true, empty: true, top: null, chg: ["top"], focus: ["if0", "ret0", "chk"], title: "When n is 0, return NULL",
-        msg: "With no students, there is no <code>s[0]</code>. Reading <code>s[0].gpa</code> is undefined behaviour. It reads whatever bytes are there, or crashes. So <code>best</code> returns <code>NULL</code>, and the caller must check <code>top != NULL</code> before using <code>top-&gt;name</code>. This is the same rule as <code>fopen</code> or <code>malloc</code> returning <code>NULL</code>." },
+        msg: "With no students, there is no <code>s[0]</code>. Reading <code>s[0].gpa</code> is undefined behavior. It reads whatever bytes are there, or crashes. So <code>best</code> returns <code>NULL</code>, and the caller must check <code>top != NULL</code> before using <code>top-&gt;name</code>. This is the same rule as <code>fopen</code> or <code>malloc</code> returning <code>NULL</code>." },
     ],
   };
 
@@ -578,7 +578,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       ];
       if (st.code === "memcmp") return [
         base[0],
-        { id: "c", html: "Flight c;", cm: { text: "no initialiser: garbage" } },
+        { id: "c", html: "Flight c;", cm: { text: "no initializer: garbage" } },
         { id: "cpy", html: `strcpy(c.number, ${S('"BA117"')});`, cm: { text: "writes 6 bytes" } },
         { id: "calt", html: "c.altitude = 33000;" },
         { id: "bl", html: "" },
