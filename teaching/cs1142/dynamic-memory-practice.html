@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Memory Practice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Code on the left; stack frames, heap blocks (in address order) and the list (in next order) on the right */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #18202c; --muted: #586274; --line: #d6dce5; --empty: #eaeef3;
+  --accent: #d6455d; --ok: #1f8a5a; --ok-soft: #d9f2e6; --bad: #c9334c; --bad-soft: #fbe1e5;
+  --node: #63b8dc; --node-ink: #06283a; --node-soft: #e2f2fa;
+  --arr: #f6c453; --arr-ink: #3b2a00;
+  --ptr: #4fbf8f; --ptr-ink: #022a19;
+  --hdr: #5b6475; --hdr-ink: #ffffff;
+  --pad-a: #e2e6ec; --pad-b: #f7f8fa; --pad-ink: #7a8394;
+  --focus-line: #fff4d6; --warn: #b26a00; --warn-soft: #fff1d6;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+    --accent: #ff6b81; --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+    --node: #3c9ac2; --node-ink: #031620; --node-soft: #13293a;
+    --arr: #d9a531; --arr-ink: #1d1400; --ptr: #35a578; --ptr-ink: #01180e;
+    --hdr: #8691a5; --hdr-ink: #0f131a;
+    --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8;
+    --focus-line: #2c2a1c; --warn: #f0b552; --warn-soft: #2f2410;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+  --accent: #ff6b81; --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+  --node: #3c9ac2; --node-ink: #031620; --node-soft: #13293a;
+  --arr: #d9a531; --arr-ink: #1d1400; --ptr: #35a578; --ptr-ink: #01180e;
+  --hdr: #8691a5; --hdr-ink: #0f131a;
+  --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8;
+  --focus-line: #2c2a1c; --warn: #f0b552; --warn-soft: #2f2410;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font-sans); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+header h1 { margin: 0; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 76ch; }
+code, .mono { font-family: var(--font-mono); }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tabs .lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 4px; }
+.tab { font: 500 .95rem var(--font-sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; }
+.tab b { font-family: var(--font-mono); margin-right: 6px; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.main { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel h2 { margin: 0 0 10px; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.sec + .sec { margin-top: 18px; }
+
+.code { font: 500 .9rem/1.75 var(--font-mono); overflow-x: auto; white-space: pre; }
+.code .ln { padding: 0 8px; border-radius: 4px; transition: background .25s; min-height: 1.75em; }
+.code .ln.focus { background: var(--focus-line); }
+.code .cm { color: var(--muted); font-weight: 400; }
+.code .cm.bad { color: var(--accent); }
+.code .kw { font-weight: 600; }
+.code .str { color: var(--ok); }
+.qbox { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 0; color: var(--muted); font-size: .95rem; }
+.qbox b { color: var(--ink); }
+.qbox code { background: var(--empty); padding: 0 4px; border-radius: 4px; }
+
+/* stack */
+.frames { display: flex; flex-direction: column; gap: 8px; }
+.frame { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.frame .fh { font: 600 .72rem var(--font-sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+.frame.dead { background: repeating-linear-gradient(45deg, var(--pad-a) 0 7px, var(--pad-b) 7px 14px); border-style: dashed; }
+.frame.dead .fh { color: var(--bad); }
+.frame.enter { animation: fadein .45s ease both; }
+.vars { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.var { border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font-family: var(--font-mono); background: var(--panel); }
+.var .vn { font-weight: 600; margin-right: 8px; }
+.var .vv { font-weight: 600; font-variant-numeric: tabular-nums; }
+.var .vt { display: block; font-size: .7rem; color: var(--muted); }
+.var.ptr { border-left: 5px solid var(--ptr); }
+.var.dang { border-color: var(--bad); background: var(--bad-soft); }
+.var.dang .vt, .var.garb .vv { color: var(--bad); font-weight: 600; }
+.var.garb { border-color: var(--bad); }
+.var.chg { animation: flash 1s ease both; }
+.arr { display: inline-grid; grid-auto-flow: column; gap: 3px; margin-top: 4px; }
+.arr .c { min-width: 44px; text-align: center; border-radius: 5px; padding: 2px 4px; background: var(--arr); color: var(--arr-ink); font: 600 .85rem var(--font-mono); }
+.arr .c small { display: block; font-size: .6rem; opacity: .7; font-weight: 500; }
+.arr .c.g { background: var(--bad-soft); color: var(--bad); }
+.arr .c.hit { animation: flash 1s ease both; }
+
+/* heap */
+.heapwrap { overflow-x: auto; }
+.heap { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.heap:empty::before { content: "Nothing allocated."; color: var(--muted); font-size: .9rem; }
+.blk { width: 168px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; background: var(--panel); }
+.blk .bh { display: flex; justify-content: space-between; gap: 6px; font: 500 .72rem var(--font-mono); background: var(--hdr); color: var(--hdr-ink); padding: 2px 8px; }
+.blk .badges { display: flex; gap: 4px; flex-wrap: wrap; min-height: 26px; padding: 4px 6px 0; }
+.badge { font: 600 .72rem var(--font-mono); padding: 0 8px; border-radius: 999px; line-height: 1.6; background: var(--ptr); color: var(--ptr-ink); }
+.badge.dang { background: var(--panel); color: var(--bad); box-shadow: inset 0 0 0 2px var(--bad); }
+.badge.in { animation: fadein .4s ease both; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 6px; }
+.fields.ints { grid-template-columns: repeat(4, 1fr); }
+.fld { border-radius: 6px; padding: 3px 6px; background: var(--node); color: var(--node-ink); font-family: var(--font-mono); min-width: 0; }
+.fld .k { display: block; font-size: .62rem; opacity: .75; }
+.fld .x { display: block; font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fields.ints .fld { background: var(--arr); color: var(--arr-ink); text-align: center; padding: 3px 2px; }
+.fld.unk .x { opacity: .5; }
+.fld.hit { animation: flash 1s ease both; }
+.blk .bf { font: 500 .72rem var(--font-sans); color: var(--muted); padding: 0 8px 6px; min-height: 1.4em; }
+.blk.free { background: repeating-linear-gradient(45deg, var(--pad-a) 0 7px, var(--pad-b) 7px 14px); }
+.blk.free .fld { background: var(--bad-soft); color: var(--bad); }
+.blk.free .bf { color: var(--bad); font-weight: 600; }
+.blk.leak { border: 3px solid var(--bad); }
+.blk.leak .bf { color: var(--bad); font-weight: 600; }
+.blk.enter { animation: drop .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+.blk.inlist { box-shadow: 0 0 0 2px var(--node); }
+
+/* list */
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-family: var(--font-mono); }
+.chain .hd { font-weight: 600; }
+.chain .ar { color: var(--muted); }
+.chain .nd { display: inline-flex; border-radius: 7px; overflow: hidden; border: 1px solid var(--node); }
+.chain .nd span { padding: 2px 9px; font-weight: 600; }
+.chain .nd span:first-child { background: var(--node); color: var(--node-ink); }
+.chain .nd span:last-child { background: var(--node-soft); font-size: .78rem; font-weight: 500; display: flex; align-items: center; }
+.chain .nd.bad { border-color: var(--bad); }
+.chain .nd.bad span:first-child { background: var(--bad-soft); color: var(--bad); }
+.chain .null { color: var(--muted); font-weight: 600; }
+.chain .stop { color: var(--bad); font-weight: 600; }
+.chain .nd.enter { animation: fadein .45s ease both; }
+.counter { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; min-width: 110px; }
+.stat .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat .v { font: 600 1.25rem var(--font-mono); }
+.stat.bad { border-color: var(--bad); } .stat.bad .v { color: var(--bad); }
+
+.out { margin-top: 14px; border-radius: 8px; padding: 8px 12px; font: 500 .95rem var(--font-mono); background: var(--ink); color: var(--bg); white-space: pre-wrap; }
+.out .pr { opacity: .55; margin-right: 8px; }
+.out .er { color: #ff9aa9; }
+.note { margin-top: 12px; border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 6px 12px; font: 500 .85rem var(--font-mono); white-space: pre-wrap; }
+.note b { color: var(--warn); }
+
+.narr { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.narr .count { font: 500 .75rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.narr h3 { margin: 0; font-size: 1.3rem; line-height: 1.3; text-wrap: balance; }
+.narr p { margin: 0; font-size: 1.05rem; max-width: 76ch; }
+.narr code { background: var(--empty); padding: 0 4px; border-radius: 4px; font-size: .95em; }
+.math { font-family: var(--font-mono); font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+.btn { font: 500 .9rem var(--font-sans); padding: 8px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 96px; }
+.speed { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); margin-left: auto; }
+.keys { font-size: .8rem; color: var(--muted); }
+kbd { font: 500 .75rem var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hidden { display: none !important; }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drop { from { transform: translateY(-14px) scale(.95); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes flash { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { header h1 { font-size: 1.4rem; } .blk { width: calc(50% - 4px); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Dynamic memory: practice walk-through</h1>
+    <p>Slide 18: one to fix, one to find, one to write. Try each on paper first, then step through the answer. Model: glibc on x86-64, where every small <code>malloc</code> takes a 32-byte block.</p>
+  </header>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="main">
+    <div class="left">
+      <section class="panel"><h2 id="codeTitle">C</h2><div class="code" id="code"></div></section>
+      <section class="panel" id="qPanel"><h2>The question</h2><p class="qbox" id="question"></p></section>
+    </div>
+    <section class="panel">
+      <div class="sec"><h2>Stack (grows down)</h2><div class="frames" id="stack"></div></div>
+      <div class="sec"><h2>Heap, in address order (each block 32 bytes: 8 header + 16 data + 8 padding)</h2><div class="heapwrap"><div class="heap" id="heap"></div></div></div>
+      <div class="sec" id="listSec"><h2 id="listTitle">The list, following next</h2><div class="chain" id="chain"></div><div class="counter" id="counter"></div></div>
+      <div id="extra"></div>
+      <div class="narr" aria-live="polite"><span class="count" id="count"></span><h3 id="ntitle"></h3><p id="nmsg"></p></div>
+      <div class="controls">
+        <button class="btn" id="resetBtn">Restart</button>
+        <button class="btn" id="backBtn">◀ Back</button>
+        <button class="btn primary" id="playBtn">▶ Play</button>
+        <button class="btn" id="stepBtn">Step ▶</button>
+        <label class="speed" for="speed">Speed <input type="range" id="speed" min="0.5" max="3" step="0.25" value="1"></label>
+        <span class="keys" style="width:100%"><kbd>→</kbd> step &nbsp;<kbd>←</kbd> back &nbsp;<kbd>space</kbd> play &nbsp;<kbd>R</kbd> restart<span id="tabKeys"></span></span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  const PAGE = "practice";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const K = (s) => `<span class="kw">${s}</span>`;
+  const S = (s) => `<span class="str">${esc(s)}</span>`;
+  const C = (s, bad) => `<span class="cm${bad ? " bad" : ""}">${esc(s)}</span>`;
+
+  /* ================= memory model ================= */
+  const HEAP0 = 0x5555555592a0;
+  const FRAME0 = 0x7ffffffc5910;           // where make()'s array a lands
+  const KEY = "0x3b9e0f5ac17d2846";        // glibc's random tcache key (illustrative; differs every run)
+  const hex = (a) => "0x" + a.toString(16);
+  const sh = (a) => "…" + a.toString(16).slice(-4);
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  function M0() { return { frames: [{ name: "main", vars: [], dead: false }], heap: [], bin: [], top: HEAP0, out: "", err: null, note: null }; }
+  const live = (M) => M.frames.filter((f) => !f.dead);
+  const cur = (M) => live(M)[live(M).length - 1];
+  function find(M, n) { const L = live(M); for (let i = L.length - 1; i >= 0; i--) { const v = L[i].vars.find((x) => x.n === n); if (v) return v; } return null; }
+  function setVar(M, n, props) { let v = find(M, n); if (!v) { v = { n }; cur(M).vars.push(v); } Object.assign(v, props); return v; }
+  const ptr = (M, n, v) => setVar(M, n, { k: "ptr", v, g: null });
+  const int = (M, n, v) => setVar(M, n, { k: "int", v });
+  const val = (M, n) => find(M, n).v;
+  function del(M, n) { live(M).forEach((f) => (f.vars = f.vars.filter((x) => x.n !== n))); }
+  const blk = (M, a) => M.heap.find((b) => b.addr === a);
+  function malloc(M, kind) {
+    let b;
+    if (M.bin.length) { b = blk(M, M.bin.pop()); b.free = false; b.next = null; }      // tcache_get clears the key word
+    else { b = { addr: M.top, kind, val: null, next: undefined, cells: [null, null, null, null], free: false }; M.top += 32; M.heap.push(b); }
+    b.kind = kind;
+    return b.addr;
+  }
+  function free(M, a) {
+    const b = typeof a === "number" ? blk(M, a) : null;
+    if (!b) { M.err = "free(): invalid pointer\nAborted (core dumped)"; return false; }
+    if (b.free) { M.err = "free(): double free detected in tcache 2\nAborted (core dumped)"; return false; }
+    // glibc (2.32+) writes a mangled free-list pointer into bytes 0-7 and its key into bytes 8-15
+    const prevHead = M.bin.length ? M.bin[M.bin.length - 1] : 0;
+    const mangled = (BigInt(b.addr) >> 12n) ^ BigInt(prevHead);
+    b.val = Number(BigInt.asIntN(32, mangled & 0xffffffffn));
+    b.next = { g: KEY };
+    b.cells = [Number(BigInt.asIntN(32, mangled & 0xffffffffn)), Number(BigInt.asIntN(32, mangled >> 32n)), "key", "key"];
+    b.free = true; M.bin.push(b.addr);
+    return true;
+  }
+  function reach(M) {
+    const seen = new Set();
+    const walk = (a) => { while (typeof a === "number" && !seen.has(a)) { const b = blk(M, a); if (!b) return; seen.add(a); a = b.kind === "node" && !b.free ? b.next : null; } };
+    live(M).forEach((f) => f.vars.forEach((v) => v.k === "ptr" && walk(v.v)));
+    return seen;
+  }
+  function isDangling(M, v) {
+    if (v.k !== "ptr" || typeof v.v !== "number") return false;
+    const b = blk(M, v.v);
+    if (b) return b.free;
+    const f = M.frames.find((fr) => fr.vars.some((x) => x.k === "arr" && x.addr === v.v));
+    return !!(f && f.dead);
+  }
+
+  /* ================= rendering ================= */
+  const pv = (x) => (x === null ? "NULL" : x === undefined ? "?" : typeof x === "object" ? x.g : hex(x));
+  const pvs = (x) => (x === null ? "NULL" : x === undefined ? "?" : typeof x === "object" ? "garbage" : sh(x));
+
+  function renderStack(M, P) {
+    const pvars = {};
+    if (P) P.frames.forEach((f, i) => f.vars.forEach((v) => (pvars[i + ":" + v.n] = JSON.stringify(v) + f.dead)));
+    $("stack").innerHTML = M.frames.map((f, fi) => {
+      const vars = f.vars.map((v) => {
+        const chg = P && pvars[fi + ":" + v.n] !== JSON.stringify(v) + f.dead;
+        if (v.k === "arr") {
+          const pointed = live(M).flatMap((fr) => fr.vars).filter((x) => x.k === "ptr" && x.v === v.addr).map((x) => `<span class="badge${f.dead ? " dang" : ""}">${f.dead ? "⚠ " : ""}${esc(x.n)}</span>`).join(" ");
+          const pa = P && P.frames[fi] && P.frames[fi].vars.find((x) => x.n === v.n);
+          return `<div class="var"><span class="vn">${esc(v.n)}[${v.cells.length}]</span><span class="vt">int array at ${hex(v.addr)} ${pointed}</span><div class="arr">${v.cells.map((c, i) => `<span class="c${f.dead && f.reused ? " g" : ""}${pa && pa.cells[i] !== c ? " hit" : ""}"><small>[${i}]</small>${c === null ? "?" : c}</span>`).join("")}</div></div>`;
+        }
+        if (v.k === "int") return `<div class="var${chg ? " chg" : ""}"><span class="vn">${esc(v.n)}</span><span class="vv">${v.v === null ? "?" : v.v}</span><span class="vt">int</span></div>`;
+        const d = isDangling(M, v), g = v.v && typeof v.v === "object";
+        return `<div class="var ptr${d ? " dang" : ""}${g ? " garb" : ""}${chg ? " chg" : ""}"><span class="vn">${esc(v.n)}</span><span class="vv">${pv(v.v)}</span><span class="vt">${esc(v.t || "Node *")}${d ? " · dangling" : g ? " · garbage" : ""}</span></div>`;
+      }).join("");
+      const isNew = P && !P.frames[fi];
+      const title = f.dead ? (f.reused ? `${f.reused}'s frame, reusing the memory make() had` : `${f.name}'s frame: popped when ${f.name} returned`) : `${f.name}'s frame`;
+      return `<div class="frame${f.dead ? " dead" : ""}${isNew ? " enter" : ""}"><div class="fh">${esc(title)}</div><div class="vars">${vars || '<span class="vt" style="color:var(--muted);font-size:.85rem">(no variables)</span>'}</div></div>`;
+    }).join("");
+  }
+
+  function renderHeap(M, P) {
+    const R = reach(M);
+    const pmap = {}; if (P) P.heap.forEach((b) => (pmap[b.addr] = b));
+    const ptrs = live(M).flatMap((f) => f.vars).filter((v) => v.k === "ptr");
+    const listSet = new Set(chainAddrs(M));
+    $("heap").innerHTML = M.heap.slice().sort((a, b) => a.addr - b.addr).map((b) => {
+      const p = pmap[b.addr];
+      const leak = !b.free && !R.has(b.addr);
+      const badges = ptrs.filter((v) => v.v === b.addr).map((v) => `<span class="badge${b.free ? " dang" : ""}${P && find(P, v.n) && find(P, v.n).v !== v.v ? " in" : ""}">${b.free ? "⚠ " : ""}${esc(v.n)}</span>`).join("");
+      let fields;
+      if (b.kind === "ints") {
+        fields = `<div class="fields ints">${b.cells.map((c, i) => `<div class="fld${c === null ? " unk" : ""}${p && JSON.stringify(p.cells[i]) !== JSON.stringify(c) ? " hit" : ""}"><span class="k">[${i}]</span><span class="x">${c === null ? "?" : c}</span></div>`).join("")}</div>`;
+      } else {
+        const vh = p && p.val !== b.val ? " hit" : "", nh = p && JSON.stringify(p.next) !== JSON.stringify(b.next) ? " hit" : "";
+        fields = `<div class="fields"><div class="fld${b.val === null ? " unk" : ""}${vh}"><span class="k">val</span><span class="x">${b.val === null ? "?" : b.val}</span></div><div class="fld${b.next === undefined ? " unk" : ""}${nh}"><span class="k">next</span><span class="x" title="${esc(pv(b.next))}">${pvs(b.next)}</span></div></div>`;
+      }
+      const foot = b.free ? "free · allocator data inside" : leak ? "leaked: no pointer reaches it" : "";
+      const cls = ["blk"]; if (b.free) cls.push("free"); if (leak) cls.push("leak"); if (P && !p) cls.push("enter"); if (listSet.has(b.addr) && !b.free) cls.push("inlist");
+      return `<div class="${cls.join(" ")}"><div class="bh"><span>${sh(b.addr)}</span><span>${b.kind === "ints" ? "int[4]" : "Node"}</span></div><div class="badges">${badges}</div>${fields}<div class="bf">${foot}</div></div>`;
+    }).join("");
+    return M.heap.filter((b) => !b.free && !R.has(b.addr));
+  }
+
+  let LISTVAR = null;
+  function chainAddrs(M) {
+    const out = []; if (!LISTVAR) return out;
+    const hv = find(M, LISTVAR); if (!hv) return out;
+    let a = hv.v; const seen = new Set();
+    while (typeof a === "number" && !seen.has(a)) { seen.add(a); const b = blk(M, a); if (!b) break; out.push(a); if (b.free) break; a = b.next; }
+    return out;
+  }
+  function renderChain(M, P) {
+    if (!LISTVAR) { $("listSec").classList.add("hidden"); return; }
+    $("listSec").classList.remove("hidden");
+    const hv = find(M, LISTVAR);
+    if (!hv) { $("chain").innerHTML = `<span class="null">${LISTVAR} is not declared yet</span>`; return; }
+    const prevSet = new Set(P ? chainAddrs(P) : chainAddrs(M));
+    const h = [`<span class="hd">${LISTVAR}</span><span class="ar">→</span>`];
+    let a = hv.v; const seen = new Set();
+    while (true) {
+      if (a === null) { h.push(`<span class="null">NULL</span>`); break; }
+      if (a === undefined) { h.push(`<span class="stop">? (never set)</span>`); break; }
+      if (typeof a === "object") { h.push(`<span class="stop">${esc(a.g)}: garbage address</span>`); break; }
+      if (seen.has(a)) { h.push(`<span class="stop">(cycle)</span>`); break; }
+      seen.add(a);
+      const b = blk(M, a);
+      if (!b) { h.push(`<span class="stop">${hex(a)}</span>`); break; }
+      if (b.free) { h.push(`<span class="nd bad"><span>⚠ freed</span><span>${sh(a)}</span></span><span class="stop">a freed block: its next is gone</span>`); break; }
+      h.push(`<span class="nd${prevSet.has(a) ? "" : " enter"}"><span>${b.val === null ? "?" : b.val}</span><span>${sh(a)}</span></span><span class="ar">→</span>`);
+      a = b.next;
+    }
+    $("chain").innerHTML = h.join("");
+  }
+
+  function renderExtra(M) {
+    const h = [];
+    if (M.note) h.push(`<div class="note"><b>warning:</b> ${esc(M.note)}</div>`);
+    if (M.out || M.err) h.push(`<div class="out">${M.out ? `<span class="pr">$</span>${esc(M.out)}` : ""}${M.err ? `${M.out ? "\n" : ""}<span class="er">${esc(M.err)}</span>` : ""}</div>`);
+    $("extra").innerHTML = h.join("");
+  }
+
+  /* ================= exercises ================= */
+  // Build 3 → 2 → 1 by pushing at the front, as slide 16 does; leaves head, no i or n
+  function buildList(M) {
+    ptr(M, "head", null);
+    for (const i of [3, 2, 1]) { const a = malloc(M, "node"); const b = blk(M, a); b.val = i; b.next = val(M, "head"); ptr(M, "head", a); }
+  }
+  const N = (M) => blk(M, val(M, "n"));
+
+  const CODE_BUILD = [
+    `${K("typedef struct")} Node {`,
+    `    ${K("int")}          val;`,
+    `    ${K("struct")} Node *next;   ${C("// note: struct Node,")}`,
+    `} Node;                  ${C("// the typedef is not")}`,
+    `                         ${C("// usable yet here")}`,
+    `Node *head = NULL;`,
+    `${K("for")} (${K("int")} i = 3; i &gt;= 1; i--) {`,
+    `    Node *n = malloc(${K("sizeof")}(Node));`,
+    `    ${K("if")} (n == NULL) ${K("return")} 1;`,
+    `    n-&gt;val = i;`,
+    `    n-&gt;next = head;`,
+    `    head = n;`,
+    `}`,
+    `${K("for")} (Node *p = head; p != NULL; p = p-&gt;next)`,
+    `    printf(${S('"%d "')}, p-&gt;val);`,
+    `${C("// prints  1 2 3")}`,
+    `${K("while")} (head != NULL) {`,
+    `    Node *t = head-&gt;next;   ${C("// save it FIRST")}`,
+    `    free(head);`,
+    `    head = t;`,
+    `}`,
+  ];
+  const CODE_BUG = [
+    `${C("// the obvious version")}`,
+    `${K("while")} (head != NULL) {`,
+    `    free(head);`,
+    `    head = head-&gt;next;   ${C("// use after free", true)}`,
+    `}`,
+  ];
+  const CODE_GOOD = [
+    `${K("while")} (head != NULL) {`,
+    `    Node *t = head-&gt;next;   ${C("// save it FIRST")}`,
+    `    free(head);`,
+    `    head = t;`,
+    `}`,
+  ];
+
+  const freeGoodSteps = (code, L) => [
+    { code, lines: [L.w, L.t], ops: (M) => { ptr(M, "t", blk(M, val(M, "head")).next); },
+      title: "Save head->next first",
+      msg: "<code>t</code> gets the address of the second node, <code>…92c0</code>, while the first node is still ours to read." },
+    { code, lines: [L.f], ops: (M) => free(M, val(M, "head")),
+      title: "free(head): the allocator writes into the block",
+      msg: "glibc keeps its free list <em>inside</em> freed blocks. It writes a (scrambled) pointer into bytes 0–7 and a random key into bytes 8–15. On x86-64 that is exactly where <code>val</code> and <code>next</code> live, so both fields are now the allocator's data. <code>head</code> is dangling, and we don't care, because we saved <code>next</code>." },
+    { code, lines: [L.h], ops: (M) => ptr(M, "head", val(M, "t")),
+      title: "head = t",
+      msg: "The rest of the list is still reachable through <code>t</code>, so the loop moves on to it." },
+    { code, lines: [L.t, L.f, L.h], ops: (M) => { ptr(M, "t", blk(M, val(M, "head")).next); free(M, val(M, "head")); ptr(M, "head", val(M, "t")); },
+      title: "Second node: save, free, advance",
+      msg: "Same three lines. <code>t</code> gets <code>…92a0</code>, the second node is freed, and <code>head</code> moves on." },
+    { code, lines: [L.t, L.f, L.h, L.w], ops: (M) => { ptr(M, "t", blk(M, val(M, "head")).next); free(M, val(M, "head")); ptr(M, "head", val(M, "t")); del(M, "t"); },
+      title: "Last node: t = NULL, so the loop ends",
+      msg: "The last node's <code>next</code> was <code>NULL</code>, so after freeing it <code>head</code> is <code>NULL</code> and the loop stops. Three <code>malloc</code>s, three <code>free</code>s, and nothing leaks." },
+  ];
+  const bugSteps = [
+    { code: CODE_BUG, reset: (M) => { buildList(M); }, lines: [1, 2], ops: (M) => free(M, val(M, "head")),
+      title: "The obvious version: free(head) first",
+      msg: "Same three-node list. The first <code>free(head)</code> is fine on its own. But the allocator has just written its own data over <code>val</code> and <code>next</code>. Notice the other two nodes are already marked leaked: the only pointer to them was inside the node you just freed." },
+    { code: CODE_BUG, lines: [3], ops: (M) => ptr(M, "head", blk(M, val(M, "head")).next),
+      title: "head = head->next reads freed memory",
+      msg: "This is a <b>use after free</b>. <code>head-&gt;next</code> is no longer a pointer to the second node: it is glibc's random key. <code>head</code> now holds a garbage address, and the rest of the list is unreachable." },
+    { code: CODE_BUG, lines: [1, 2], ops: (M) => free(M, val(M, "head")),
+      title: "free(garbage): the program dies",
+      msg: "glibc rejects an address that isn't a block it handed out, and aborts (or the program segfaults first). With a different allocator, <code>next</code> might survive the <code>free</code> and the loop would seem to work. That is why this bug passes tests and then crashes in production. Save <code>next</code> <em>before</em> you free." },
+  ];
+
+  const EX = {};
+  EX.list = [{
+    label: "Linked list",
+    listVar: "head",
+    question: "Build the list <code>1 → 2 → 3</code> by pushing at the front, walk it, then free every node. Which line would be a use after free if you moved it?",
+    steps: [
+      { code: CODE_BUILD, lines: [0, 1, 2, 3], ops: () => {},
+        title: "sizeof(Node) is 16",
+        msg: "<code>val</code> is 4 bytes, then 4 bytes of padding so that <code>next</code>, an 8-byte pointer, starts at offset 8. So <span class=\"math\">sizeof(Node) = 16</span>, and each <code>malloc(16)</code> takes a 32-byte block: 8 header + 16 + 8 padding." },
+      { code: CODE_BUILD, lines: [5], ops: (M) => ptr(M, "head", null),
+        title: "An empty list is a NULL head",
+        msg: "<code>head</code> is a pointer in <code>main</code>'s frame. No nodes exist yet." },
+      { code: CODE_BUILD, lines: [6, 7, 8], ops: (M) => { int(M, "i", 3); ptr(M, "n", malloc(M, "node")); },
+        title: "i = 3: malloc a node",
+        msg: "<code>n</code> points to a fresh block at <code>…92a0</code>. Both fields are <b>?</b>: <code>malloc</code> doesn't initialize anything. <code>n</code> isn't <code>NULL</code>, so we carry on." },
+      { code: CODE_BUILD, lines: [9, 10], ops: (M) => { N(M).val = 3; N(M).next = val(M, "head"); },
+        title: "Fill it in: val = 3, next = head",
+        msg: "<code>n-&gt;next = head</code> copies the <em>old</em> head into the new node. The list was empty, so <code>next</code> is <code>NULL</code>." },
+      { code: CODE_BUILD, lines: [11], ops: (M) => ptr(M, "head", val(M, "n")),
+        title: "head = n: the new node is the front",
+        msg: "The list is now <code>3 → NULL</code>." },
+      { code: CODE_BUILD, lines: [6, 7, 9, 10], ops: (M) => { int(M, "i", 2); ptr(M, "n", malloc(M, "node")); N(M).val = 2; N(M).next = val(M, "head"); },
+        title: "i = 2: a second node points at the first",
+        msg: "The new block is the next piece of the heap, <code>…92c0</code>. Its <code>next</code> is the old head, <code>…92a0</code>." },
+      { code: CODE_BUILD, lines: [11], ops: (M) => ptr(M, "head", val(M, "n")),
+        title: "head = n",
+        msg: "The list is <code>2 → 3 → NULL</code>. Pushing at the front costs the same whatever the length of the list: two pointer assignments." },
+      { code: CODE_BUILD, lines: [6, 7, 9, 10, 11], ops: (M) => { int(M, "i", 1); ptr(M, "n", malloc(M, "node")); N(M).val = 1; N(M).next = val(M, "head"); ptr(M, "head", val(M, "n")); },
+        title: "i = 1: the list is 1 → 2 → 3",
+        msg: "Compare the two views. In memory the nodes are 3, 2, 1, but following <code>next</code> they are 1, 2, 3. A linked list's order is whatever the pointers say, not where the nodes sit." },
+      { code: CODE_BUILD, lines: [6, 12], ops: (M) => { del(M, "i"); del(M, "n"); },
+        title: "The loop ends: i and n go out of scope",
+        msg: "<code>n</code> was declared inside the loop, so it no longer exists. That's fine: every node is still reachable from <code>head</code>." },
+      { code: CODE_BUILD, lines: [13, 14], ops: (M) => { ptr(M, "p", val(M, "head")); M.out += "1 "; },
+        title: "Walk it: p = head",
+        msg: "<code>p</code> is a second pointer to the first node. Walking moves <code>p</code> and never touches <code>head</code>." },
+      { code: CODE_BUILD, lines: [13, 14], ops: (M) => { ptr(M, "p", blk(M, val(M, "p")).next); M.out += "2 "; },
+        title: "p = p->next",
+        msg: "Follow the pointer stored in the node: <code>…92e0</code> → <code>…92c0</code>." },
+      { code: CODE_BUILD, lines: [13, 14], ops: (M) => { ptr(M, "p", blk(M, val(M, "p")).next); M.out += "3 "; },
+        title: "p = p->next again",
+        msg: "Now at the last node, the one whose <code>next</code> is <code>NULL</code>." },
+      { code: CODE_BUILD, lines: [13, 15], ops: (M) => { del(M, "p"); },
+        title: "p becomes NULL: done walking",
+        msg: "It printed <code>1 2 3</code>. In Java you would stop here, and the garbage collector would clean up. In C, every node must be freed." },
+      ...freeGoodSteps(CODE_BUILD, { w: 16, t: 17, f: 18, h: 19 }),
+      ...bugSteps,
+    ],
+  }];
+
+  EX.practice = [
+    {
+      label: "Fix make()",
+      question: "<b>Four things wrong.</b> <code>make</code> compiles with a warning and returns garbage. Name the fault, fix it with <code>malloc</code>, and say who must free the result.",
+      steps: [
+        { code: "MAKE_Q", lines: [], ops: (M) => setVar(M, "v", { k: "ptr", v: undefined, t: "int *" }),
+          title: "Predict before you step",
+          msg: "Where does <code>a</code> live, and how long does it live? Press <kbd>→</kbd>." },
+        { code: "MAKE_Q", lines: [0, 1, 7], ops: (M) => { find(M, "v").t = "int *"; M.frames.push({ name: "make", vars: [{ n: "n", k: "int", v: 4 }, { n: "a", k: "arr", addr: FRAME0, cells: [null, null, null, null] }], dead: false }); },
+          title: "make(4): a is a local array",
+          msg: "<code>int a[n]</code> is a local variable, so it lives in <code>make</code>'s stack frame, at a stack address (<code>0x7ff…</code>). It lives exactly as long as this call does." },
+        { code: "MAKE_Q", lines: [2, 3], ops: (M) => { find(M, "a").cells = [0, 1, 2, 3]; },
+          title: "The loop fills it",
+          msg: "Nothing wrong yet: <code>a[0..3]</code> hold 0 1 2 3, inside <code>make</code>'s frame." },
+        { code: "MAKE_Q", lines: [4, 7], ops: (M) => { ptr(M, "v", FRAME0); find(M, "v").t = "int *"; cur(M).dead = true; M.note = "function returns address of local variable [-Wreturn-local-addr]"; },
+          title: "return a: the frame is popped",
+          msg: "<code>a</code> becomes the address of <code>a[0]</code>, and that address is returned, but the frame is gone as soon as <code>make</code> returns. <code>v</code> points into dead stack memory. This is the fault: <b>returning the address of a local</b>. Some gcc versions go further and return <code>NULL</code> instead, so <code>v[2]</code> crashes (slide 12)." },
+        { code: "MAKE_Q", lines: [8], ops: (M) => { const f = M.frames.find((x) => x.name === "make"); f.reused = "puts"; f.vars.find((x) => x.k === "arr").cells = [4198768, 32767, -1094795586, 0]; M.out = "made it"; },
+          title: "The next call reuses that memory",
+          msg: "<code>puts</code> gets a stack frame in the same place <code>make</code> had, and overwrites the old values with its own. <code>v</code> still points there. If you printed <code>v[2]</code> straight after <code>make</code> returned it might even show 2, which is what makes this so easy to miss." },
+        { code: "MAKE_Q", lines: [9], ops: (M) => { M.out += "\n-1094795586"; },
+          title: "v[2] reads garbage",
+          msg: "<code>v[2]</code> reads whatever <code>puts</code> left there. Garbage, no error." },
+        { code: "MAKE_FIX", reset: (M) => { ptr(M, "v", undefined); find(M, "v").t = "int *"; }, lines: [0, 1, 2], ops: (M) => { M.frames.push({ name: "make", vars: [{ n: "n", k: "int", v: 4 }], dead: false }); const a = malloc(M, "ints"); ptr(M, "a", a); find(M, "a").t = "int *"; },
+          title: "The fix: put the array in the heap",
+          msg: "<code>malloc(n * sizeof(int))</code> asks for 16 bytes that belong to nobody's frame. <code>a</code> itself is still a local, but now it is a pointer to the heap. Check for <code>NULL</code>, since <code>malloc</code> can fail." },
+        { code: "MAKE_FIX", lines: [3, 4], ops: (M) => { blk(M, val(M, "a")).cells = [0, 1, 2, 3]; },
+          title: "Fill it",
+          msg: "<code>a[i]</code> works the same way through a pointer: <code>a[i]</code> is <code>*(a + i)</code>." },
+        { code: "MAKE_FIX", lines: [5, 7], ops: (M) => { const a = val(M, "a"); cur(M).dead = true; ptr(M, "v", a); find(M, "v").t = "int *"; },
+          title: "return a: the block outlives the call",
+          msg: "<code>make</code>'s frame is popped, taking the pointer <code>a</code> with it, but the heap block stays until someone frees it. <code>v</code> gets a copy of the address, so it is valid." },
+        { code: "MAKE_FIX", lines: [8, 9], ops: (M) => { M.out = "2"; },
+          title: "v[2] is 2",
+          msg: "The caller checks for <code>NULL</code>, then uses the array." },
+        { code: "MAKE_FIX", lines: [10], ops: (M) => free(M, val(M, "v")),
+          title: "Who frees it? The caller",
+          msg: "<code>make</code> cannot free the array, because it is the result. So the caller must call <code>free(v)</code> exactly once when it's done. Write that in the function's comment: “returns a malloc'd array; the caller must free it”. <code>v</code> now dangles; <code>v = NULL;</code> is the good habit." },
+      ],
+    },
+    {
+      label: "Find the leak",
+      listVar: "list",
+      question: "<b>Find the leak.</b> Where does memory leak, how much per iteration, and what would Java have done instead?",
+      steps: [
+        { code: "LEAK", lines: [], ops: (M) => { ptr(M, "list", null); },
+          title: "Predict before you step",
+          msg: "<code>more()</code> and <code>next()</code> deliver 5, −1, 8, −3. <code>add(n)</code> appends <code>n</code> to <code>list</code>. Which nodes end up unreachable?" },
+        { code: "LEAK", lines: [0, 1, 2], ops: (M) => { ptr(M, "n", malloc(M, "node")); N(M).val = 5; },
+          title: "5: malloc a node",
+          msg: "A 32-byte block at <code>…92a0</code>, with <code>val = 5</code>. (The code never checks for <code>NULL</code>. That's a second, smaller bug.)" },
+        { code: "LEAK", lines: [3, 4], ops: (M) => { N(M).next = null; ptr(M, "list", val(M, "n")); },
+          title: "5 ≥ 0, so add(n)",
+          msg: "The node is now reachable from <code>list</code>." },
+        { code: "LEAK", lines: [0, 1, 2], ops: (M) => { ptr(M, "n", malloc(M, "node")); N(M).val = -1; },
+          title: "−1: malloc another node",
+          msg: "<code>…92c0</code>, <code>val = -1</code>. Only <code>n</code> points to it." },
+        { code: "LEAK", lines: [3], ops: () => {},
+          title: "−1 < 0, so continue",
+          msg: "<code>continue</code> jumps to the next iteration, past <code>add(n)</code>. The node never joins the list. Right now <code>n</code> still points to it, so it isn't lost yet." },
+        { code: "LEAK", lines: [0, 1, 2], ops: (M) => { ptr(M, "n", malloc(M, "node")); N(M).val = 8; },
+          title: "Next iteration: n is overwritten. Leak!",
+          msg: "<code>n</code> now holds the new block, <code>…92e0</code>. Nothing points to <code>…92c0</code> anymore, so it can never be freed. It stays allocated until the program exits." },
+        { code: "LEAK", lines: [3, 4], ops: (M) => { N(M).next = null; blk(M, val(M, "list")).next = val(M, "n"); },
+          title: "8 ≥ 0, so add(n)",
+          msg: "The list is <code>5 → 8</code>." },
+        { code: "LEAK", lines: [0, 1, 2, 3], ops: (M) => { ptr(M, "n", malloc(M, "node")); N(M).val = -3; },
+          title: "−3: malloc, then continue",
+          msg: "Another node that never joins the list." },
+        { code: "LEAK", lines: [0], ops: (M) => del(M, "n"),
+          title: "The loop ends: two blocks leaked",
+          msg: "<code>n</code> goes out of scope, and the −3 node is lost too. Every negative value leaks <b>one Node</b>: <code>sizeof(Node)</code> is 16 bytes, but each block really takes <b>32</b> of heap. Java would have done nothing wrong: the node becomes unreachable and the garbage collector reclaims it." },
+        { code: "LEAK_FIX", reset: (M) => {
+            ptr(M, "list", null);
+            for (const x of [5, -1, 8, -3]) { ptr(M, "n", malloc(M, "node")); N(M).val = x; if (x < 0) { free(M, val(M, "n")); continue; } N(M).next = null; if (val(M, "list") === null) ptr(M, "list", val(M, "n")); else blk(M, val(M, "list")).next = val(M, "n"); }
+            del(M, "n");
+          }, lines: [3, 4, 5], ops: () => {},
+          title: "The fix: free(n) before continue",
+          msg: "Every path out of the loop body must account for the node: either <code>add</code> keeps it or <code>free</code> returns it. Now the −1 block goes back on the free list, and the next <code>malloc</code> reuses it for 8. No leaks, and only three blocks were ever taken from the heap. Even better: read the value first, and only <code>malloc</code> once you know you'll keep it." },
+      ],
+    },
+    {
+      label: "Free the list",
+      listVar: "head",
+      question: "<b>Free the list.</b> <code>head</code> points to a list of malloc'd Nodes. Write the loop that frees every one. Explain in one sentence why the obvious version is a use after free.",
+      steps: [
+        { code: CODE_GOOD, reset: (M) => buildList(M), lines: [], ops: () => {},
+          title: "Predict before you step",
+          msg: "The list <code>1 → 2 → 3</code>, built as on slide 16. Write your loop, then step." },
+        ...freeGoodSteps(CODE_GOOD, { w: 0, t: 1, f: 2, h: 3 }),
+        ...bugSteps,
+        { code: CODE_BUG, lines: [2, 3], ops: () => {},
+          title: "The one-sentence answer",
+          msg: "The obvious version reads <code>head-&gt;next</code> <em>after</em> <code>free(head)</code> has given that node back, so it reads memory the allocator now owns. Save <code>next</code> first, then free." },
+      ],
+    },
+  ];
+
+  const CODES = {
+    MAKE_Q: [
+      `${K("int")} *make(${K("int")} n) {`,
+      `  ${K("int")} a[n];`,
+      `  ${K("for")} (${K("int")} i=0;i&lt;n;i++)`,
+      `    a[i]=i;`,
+      `  ${K("return")} a;           ${C("// warning", true)}`,
+      `}`,
+      ``,
+      `${K("int")} *v = make(4);`,
+      `puts(${S('"made it"')});`,
+      `printf(${S('"%d\\n"')}, v[2]);`,
+    ],
+    MAKE_FIX: [
+      `${K("int")} *make(${K("int")} n) {`,
+      `  ${K("int")} *a = malloc(n * ${K("sizeof")}(${K("int")}));`,
+      `  ${K("if")} (a == NULL) ${K("return")} NULL;`,
+      `  ${K("for")} (${K("int")} i = 0; i &lt; n; i++)`,
+      `    a[i] = i;`,
+      `  ${K("return")} a;          ${C("// caller must free")}`,
+      `}`,
+      `${K("int")} *v = make(4);`,
+      `${K("if")} (v == NULL) ${K("return")} 1;`,
+      `printf(${S('"%d\\n"')}, v[2]);`,
+      `free(v);                ${C("// the caller's job")}`,
+    ],
+    LEAK: [
+      `${K("while")} (more()) {`,
+      `  Node *n = malloc(${K("sizeof")}(Node));`,
+      `  n-&gt;val = next();`,
+      `  ${K("if")} (n-&gt;val &lt; 0) ${K("continue")};`,
+      `  add(n);`,
+      `}`,
+    ],
+    LEAK_FIX: [
+      `${K("while")} (more()) {`,
+      `  Node *n = malloc(${K("sizeof")}(Node));`,
+      `  n-&gt;val = next();`,
+      `  ${K("if")} (n-&gt;val &lt; 0) {`,
+      `    free(n);            ${C("// give it back")}`,
+      `    ${K("continue")};`,
+      `  }`,
+      `  add(n);`,
+      `}`,
+    ],
+  };
+
+  const ex = EX[PAGE];
+  const STATES = ex.map((e) => {
+    let M = M0(); const out = [];
+    e.steps.forEach((s) => {
+      if (s.reset) { M = M0(); s.reset(M); } else M = clone(M);
+      s.ops(M);
+      out.push(M);
+    });
+    return out;
+  });
+
+  /* ================= playback ================= */
+  let tab = 0, step = 0, prev = -1, timer = null;
+  const saved = ex.map(() => 0);
+  const fwd = () => step === prev + 1;
+  function render() {
+    const e = ex[tab], s = e.steps[step], M = STATES[tab][step];
+    const P = fwd() && prev >= 0 ? STATES[tab][prev] : null;
+    const code = typeof s.code === "string" ? CODES[s.code] : s.code;
+    $("code").innerHTML = code.map((c, i) => `<div class="ln${s.lines.includes(i) ? " focus" : ""}">${c}</div>`).join("");
+    $("question").innerHTML = e.question;
+    LISTVAR = e.listVar || null;
+    $("listTitle").textContent = LISTVAR ? `The list, following next from ${LISTVAR}` : "";
+    renderStack(M, P);
+    const leaks = renderHeap(M, P);
+    renderChain(M, P);
+    $("counter").innerHTML = e.label === "Find the leak" ? `<div class="stat${leaks.length ? " bad" : ""}"><div class="k">Leaked blocks</div><div class="v">${leaks.length}</div></div><div class="stat${leaks.length ? " bad" : ""}"><div class="k">Leaked heap bytes</div><div class="v">${leaks.length * 32}</div></div>` : "";
+    renderExtra(M);
+    $("count").textContent = `${ex.length > 1 ? `Exercise ${tab + 1} · ` : ""}Step ${step + 1} of ${e.steps.length}`;
+    $("ntitle").innerHTML = s.title;
+    $("nmsg").innerHTML = s.msg;
+    $("backBtn").disabled = step === 0;
+    $("stepBtn").disabled = step === e.steps.length - 1;
+    document.querySelectorAll(".tab").forEach((b, i) => b.setAttribute("aria-selected", String(i === tab)));
+    prev = step;
+  }
+  const last = () => ex[tab].steps.length - 1;
+  function go(n) { step = Math.max(0, Math.min(last(), n)); render(); }
+  function next() { if (step < last()) go(step + 1); else stop(); }
+  function back() { stop(); if (step > 0) { prev = -5; step--; render(); } }
+  function restart() { stop(); step = 0; prev = -1; render(); }
+  function play() {
+    if (step >= last()) { step = 0; prev = -1; render(); }
+    $("playBtn").textContent = "❚❚ Pause";
+    timer = setInterval(() => { next(); if (step >= last()) stop(); }, 4000 / parseFloat($("speed").value));
+  }
+  function stop() { if (timer) clearInterval(timer); timer = null; $("playBtn").textContent = "▶ Play"; }
+  function setTab(t) { if (t === tab || t >= ex.length) return; stop(); saved[tab] = step; tab = t; step = saved[t]; prev = -5; render(); }
+
+  if (ex.length > 1) {
+    const tabs = $("tabs");
+    tabs.innerHTML = '<span class="lbl">Exercise</span>';
+    ex.forEach((e, i) => { const b = document.createElement("button"); b.className = "tab"; b.setAttribute("role", "tab"); b.innerHTML = `<b>${i + 1}</b>${e.label}`; b.addEventListener("click", () => setTab(i)); tabs.appendChild(b); });
+    $("tabKeys").innerHTML = " &nbsp;<kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> exercise";
+  } else { $("tabs").classList.add("hidden"); }
+  $("stepBtn").addEventListener("click", () => { stop(); next(); });
+  $("backBtn").addEventListener("click", back);
+  $("resetBtn").addEventListener("click", restart);
+  $("playBtn").addEventListener("click", () => (timer ? stop() : play()));
+  $("speed").addEventListener("input", () => { if (timer) { stop(); play(); } });
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); stop(); next(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); back(); }
+    else if (e.key === " " && tag !== "button") { e.preventDefault(); timer ? stop() : play(); }
+    else if (e.key === "r" || e.key === "R") restart();
+    else if (/^[1-3]$/.test(e.key)) setTab(+e.key - 1);
+  });
+  render();
+})();
+</script>
+</body>
+</html>
