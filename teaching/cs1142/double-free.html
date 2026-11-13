@@ -127,6 +127,7 @@ code, .mono { font-family: var(--font-mono); }
 .zc.fr { background: var(--free-bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 .zc.unk { opacity: .45; font-weight: 400; }
 .zc.nul { font-size: .7rem; }
+.zc.lk { background: var(--free-bg); color: var(--ink); box-shadow: inset 0 0 0 1px var(--muted); font-size: .72rem; font-weight: 500; }
 .zc.hit { animation: flash 1s ease both; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
 .legend i { display: inline-block; width: 13px; height: 13px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
@@ -225,6 +226,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           <span><i style="background:var(--hdr)"></i>8-byte header (block size)</span>
           <span><i style="background:var(--v0)"></i>your bytes</span>
           <span><i style="background:repeating-linear-gradient(45deg,var(--pad-a) 0 4px,var(--pad-b) 4px 8px)"></i>padding to a multiple of 16</span>
+          <span><i style="background:var(--free-bg);box-shadow:inset 0 0 0 1px var(--muted)"></i>free's bookkeeping: next-free link + key</span>
           <span><b class="mono">?</b> never written: whatever was there</span>
         </div>
       </div>
@@ -270,6 +272,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const i = l.indexOf(user(b)); if (i >= 0) l.splice(i, 1);
     if (!l.length) delete H.fl[b.size];
   }
+  // glibc tcache: free writes its bookkeeping into the first 16 bytes of the block
+  const KEYB = [0x46, 0x28, 0x7d, 0xc1, 0x5a, 0x0f, 0x9e, 0x3b];   // illustrative key value
+  function scribble(H, b) {
+    const l = H.fl[b.size] || [], head = l.length ? l[l.length - 1] : 0;
+    let v = (BigInt(user(b)) >> 12n) ^ BigInt(head);                 // safe-linking: (addr >> 12) ^ next
+    const link = [];
+    for (let i = 0; i < 8; i++) { link.push(Number(v & 255n)); v >>= 8n; }
+    b.link = link.concat(KEYB);
+    for (let i = 0; i < 16 && i < b.bytes.length; i++) b.bytes[i] = b.link[i];
+  }
+  const hasLink = (b) => b.free && b.link && b.link.every((v, i) => b.bytes[i] === v);
   function declare(H, name) { if (!H.order.includes(name)) H.order.push(name); if (!(name in H.vars)) H.vars[name] = undefined; }
   function isDangling(H, name) {
     const a = H.vars[name];
@@ -295,6 +308,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const a = l[l.length - 1];
       b = H.blocks.find((x) => user(x) === a);
       flRemove(H, b); how = "reuse";
+      for (let i = 8; i < 16; i++) b.bytes[i] = 0;                    // tcache_get clears the key
     } else {
       const c = byAddr(H).filter((x) => x.free && x.size >= sz);
       if (c.length) {
@@ -302,14 +316,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (b.size - sz >= 32) {
           split = { chunk: b.chunk + sz, size: b.size - sz, req: 0, free: true, bytes: b.bytes.slice(sz), gen: H.nextGen++ };
           b.bytes = b.bytes.slice(0, sz - 8); b.size = sz;
-          H.blocks.push(split); flPush(H, split);
+          H.blocks.push(split); scribble(H, split); flPush(H, split);
         }
       } else {
         b = { chunk: H.top, size: sz, bytes: Array(sz - 8).fill(null), free: true };
         H.top += sz; H.blocks.push(b); how = "top";
       }
     }
-    b.free = false; b.req = n; b.gen = H.nextGen++; b.owner = name; b.leak = false;
+    b.free = false; b.link = null; b.req = n; b.gen = H.nextGen++; b.owner = name; b.leak = false;
     H.vars[name] = user(b); H.gens[name] = b.gen;
     return { b, how, sz, split, leaked };
   }
@@ -338,6 +352,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (b.free) { H.dead = true; H.out.push({ err: "free(): double free detected in tcache 2\nAborted (core dumped)" }); return { kind: "double" }; }
     const stale = b.gen !== H.gens[name];
     const victim = b.owner;
+    scribble(H, b);
     b.free = true; b.owner = null; b.leak = false; flPush(H, b);
     const merged = H.merge ? coalesce(H) : 0;
     return { kind: stale ? "stale" : "ok", b, victim, merged };
@@ -363,7 +378,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (let i = a - user(b); i < b.bytes.length && s.length < 60; i++) {
       const c = b.bytes[i];
       if (c === 0) break;
-      s += c === null ? "�" : String.fromCharCode(c);
+      s += c === null ? "�" : c < 32 || c > 126 ? "·" : String.fromCharCode(c);
     }
     return s;
   }
@@ -406,7 +421,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       else if (b.owner) { lbl = `${esc(b.owner)} · ${b.req} B`; style = vcol(b.owner); }
       else { lbl = `leaked · ${b.req} B`; style = "--bc: var(--bad-soft); --bi: var(--bad);"; }
       const s = readStr(H, user(b));
-      const txt = b.bytes[0] !== null && b.bytes[0] !== undefined ? `"${esc(s)}"` : "";
+      const txt = hasLink(b) ? "link + key" : b.bytes[0] !== null && b.bytes[0] !== undefined ? `"${esc(s)}"` : "";
       const cls = ["blk"];
       if (b.free) cls.push("free");
       if (b.leak) cls.push("leak");
@@ -434,13 +449,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const owner = b.free ? "free block" : b.owner ? `${b.owner}'s block` : "leaked block";
     $("zoomTitle").textContent = `Bytes of the ${owner} at ${sh(user(b))}: ${b.size} bytes = 8 header + ${b.free ? b.size - 8 + " free" : b.req + " requested + " + (b.size - 8 - b.req) + " padding"}`;
     const st = b.free ? "" : b.owner ? vcol(b.owner) : "--bc: var(--bad-soft); --bi: var(--bad);";
-    const h = [];
+    const h = [], lk = hasLink(b);
+    const hit8 = (s) => p && p.size === b.size && [0, 1, 2, 3, 4, 5, 6, 7].some((j) => p.bytes[s + j] !== b.bytes[s + j]);
     for (let r = 0; r < b.size / 16; r++) {
       h.push(`<div class="zr">${sh(b.chunk + 16 * r)}</div>`);
       for (let c = 0; c < 16; c++) {
         const i = r * 16 + c;
         if (i < 8) { if (i === 0) h.push(`<div class="zc hd" style="grid-column: span 8">header: size ${b.size}</div>`); continue; }
         const k = i - 8, v = b.bytes[k];
+        if (lk && k < 16) {
+          if (k === 0 || k === 8) h.push(`<div class="zc lk${hit8(k) ? " hit" : ""}" style="grid-column: span 8" title="Written by free">${k === 0 ? "next free block (encoded)" : "tcache key"}</div>`);
+          continue;
+        }
         const ch = v === null || v === undefined ? "?" : v === 0 ? "\\0" : v < 32 || v > 126 ? "·" : esc(String.fromCharCode(v));
         const cls = ["zc"];
         if (b.free) cls.push("fr"); else if (k >= b.req) cls.push("pd");
@@ -506,7 +526,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       msg: "<span class=\"math\">8 + 32 = 40 → 48</span> bytes, at <code>0x…92a0</code>." },
     { lines: [1], ops: (H) => free(H, "p"), zoom: "p",
       title: "free(p): the block goes on the free list",
-      msg: "The 48-byte free list now holds <code>…92a0</code>. <code>p</code> still holds that address, so it is dangling. Up to here this is a correct program, as long as nobody uses <code>p</code> again." },
+      msg: "The 48-byte free list now holds <code>…92a0</code>. <code>free</code> writes its bookkeeping, a link to the next free block and a key, into the first 16 bytes. <code>p</code> still holds that address, so it is dangling. Up to here this is a correct program, as long as nobody uses <code>p</code> again." },
     { lines: [2], ops: (H) => malloc(H, "q", 32), zoom: "q",
       title: "q = malloc(32) gets p's block",
       msg: "Same size, so <code>malloc</code> takes the block straight off the free list: <span class=\"math\">q == p</span>. <code>q</code> owns the block now. <code>p</code> is a stale copy of the same address." },
@@ -515,19 +535,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       msg: "<code>\"q's data\"</code> plus its <code>\\0</code> is 9 bytes. As far as <code>q</code> knows, the block is its own." },
     { lines: [4, 5], ops: (H) => free(H, "p"), zoom: "q",
       title: "free(p) frees q's block, and nothing objects",
-      msg: "<code>p</code> holds <code>…92a0</code>, so <code>free(p)</code> frees whatever lives there now: <code>q</code>'s block. glibc only sees a block that is in use, which is exactly what <code>free</code> expects. It puts the block back on the free list. <code>q</code> is now dangling too, and nothing told it." },
+      msg: "<code>p</code> holds <code>…92a0</code>, so <code>free(p)</code> frees whatever lives there now: <code>q</code>'s block. glibc only sees a block that is in use, which is exactly what <code>free</code> expects. It puts the block back on the free list and writes its link and key over <code>q</code>'s data. <code>q</code> is now dangling too, and nothing told it." },
     { lines: [6], ops: (H) => malloc(H, "r", 32), zoom: "r",
       title: "r = malloc(32): one block, three owners",
       msg: "The free list hands out the same block a third time. <span class=\"math\">p == q == r == 0x…92a0</span>. <code>r</code> owns it, <code>q</code> still thinks it owns it, and <code>p</code> started all this." },
     { lines: [7], ops: (H) => strcpy(H, "r", "r's data"), zoom: "r",
-      title: "r overwrites q's data",
-      msg: "<code>r</code> writes into its own block, which is also <code>q</code>'s data. The flashing bytes are the ones that changed. Only <code>'r'</code> differs from <code>'q'</code>, so one byte flips." },
+      title: "r writes into q's block",
+      msg: "<code>malloc</code> cleared the key, and <code>r</code> writes over the old link. The flashing bytes are the ones that changed. This is <code>r</code>'s block, and it is also the block <code>q</code> still points at." },
     { lines: [8], ops: (H) => H.out.push({ text: readStr(H, H.vars.q) }), zoom: "r",
       title: "printf(\"%s\", q) prints r's data",
       msg: "<code>q</code> printed <code>r</code>'s data, and nothing ever reported an error. The bug is the second <code>free(p)</code>. The symptom appears two statements later, through a different pointer. In a real program those are in different files." },
     { lines: [0, 1], code: CODE13, reset: true, ops: (H) => { declare(H, "p"); malloc(H, "p", 32); free(H, "p"); }, zoom: "p",
       title: "Why didn't glibc notice? Compare slide 13",
-      msg: "When glibc puts a block on a free list, it writes a marker (the tcache <em>key</em>) into the block. <code>free</code> checks for that marker first. When <code>malloc</code> hands the block out again, it clears the marker. Here the block has just been freed, so the marker is set." },
+      msg: "When glibc puts a block on a free list, it writes a marker (the tcache <em>key</em>, in the byte view) into the block. <code>free</code> checks for that marker first. When <code>malloc</code> hands the block out again, it clears the marker. Here the block has just been freed, so the marker is set." },
     { lines: [2], code: CODE13, ops: (H) => free(H, "p"), zoom: "p",
       title: "Freed twice in a row: caught",
       msg: "The marker is there, so glibc knows the block is already free, and it aborts. On slide 14, <code>malloc</code> had cleared the marker before the second <code>free(p)</code>. The block looked like any block in use, so there was nothing to catch." },
@@ -607,7 +627,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       ltitle = `${name} = ${hex(user(r.b))}`;
       const math = `<span class="math">8 + ${n} = ${n + 8} → ${r.sz}</span>`;
       lmsg = r.how === "reuse"
-        ? `${math}. The ${r.sz}-byte free list had a block, so <code>malloc</code> reused it. Whatever was in it is still there.`
+        ? `${math}. The ${r.sz}-byte free list had a block, so <code>malloc</code> reused it. It clears the key, but everything else in the block is still there, including the old link.`
         : r.how === "fit"
           ? `${math}. No ${r.sz}-byte block on a free list, so <code>malloc</code> took the first free block big enough.${r.split ? ` It split off the unused ${r.split.size} bytes as a new free block.` : ` The leftover would be under 32 bytes, so ${name} gets the whole ${r.b.size}-byte block.`}`
           : `${math}. Nothing on the free lists fits, so the block comes from the top of the heap, which moves up by ${r.sz}.`;

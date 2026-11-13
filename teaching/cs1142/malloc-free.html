@@ -127,6 +127,7 @@ code, .mono { font-family: var(--font-mono); }
 .zc.fr { background: var(--free-bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 .zc.unk { opacity: .45; font-weight: 400; }
 .zc.nul { font-size: .7rem; }
+.zc.lk { background: var(--free-bg); color: var(--ink); box-shadow: inset 0 0 0 1px var(--muted); font-size: .72rem; font-weight: 500; }
 .zc.hit { animation: flash 1s ease both; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
 .legend i { display: inline-block; width: 13px; height: 13px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
@@ -225,6 +226,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           <span><i style="background:var(--hdr)"></i>8-byte header (block size)</span>
           <span><i style="background:var(--v0)"></i>your bytes</span>
           <span><i style="background:repeating-linear-gradient(45deg,var(--pad-a) 0 4px,var(--pad-b) 4px 8px)"></i>padding to a multiple of 16</span>
+          <span><i style="background:var(--free-bg);box-shadow:inset 0 0 0 1px var(--muted)"></i>free's bookkeeping: next-free link + key</span>
           <span><b class="mono">?</b> never written: whatever was there</span>
         </div>
       </div>
@@ -270,6 +272,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const i = l.indexOf(user(b)); if (i >= 0) l.splice(i, 1);
     if (!l.length) delete H.fl[b.size];
   }
+  // glibc tcache: free writes its bookkeeping into the first 16 bytes of the block
+  const KEYB = [0x46, 0x28, 0x7d, 0xc1, 0x5a, 0x0f, 0x9e, 0x3b];   // illustrative key value
+  function scribble(H, b) {
+    const l = H.fl[b.size] || [], head = l.length ? l[l.length - 1] : 0;
+    let v = (BigInt(user(b)) >> 12n) ^ BigInt(head);                 // safe-linking: (addr >> 12) ^ next
+    const link = [];
+    for (let i = 0; i < 8; i++) { link.push(Number(v & 255n)); v >>= 8n; }
+    b.link = link.concat(KEYB);
+    for (let i = 0; i < 16 && i < b.bytes.length; i++) b.bytes[i] = b.link[i];
+  }
+  const hasLink = (b) => b.free && b.link && b.link.every((v, i) => b.bytes[i] === v);
   function declare(H, name) { if (!H.order.includes(name)) H.order.push(name); if (!(name in H.vars)) H.vars[name] = undefined; }
   function isDangling(H, name) {
     const a = H.vars[name];
@@ -295,6 +308,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const a = l[l.length - 1];
       b = H.blocks.find((x) => user(x) === a);
       flRemove(H, b); how = "reuse";
+      for (let i = 8; i < 16; i++) b.bytes[i] = 0;                    // tcache_get clears the key
     } else {
       const c = byAddr(H).filter((x) => x.free && x.size >= sz);
       if (c.length) {
@@ -302,14 +316,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (b.size - sz >= 32) {
           split = { chunk: b.chunk + sz, size: b.size - sz, req: 0, free: true, bytes: b.bytes.slice(sz), gen: H.nextGen++ };
           b.bytes = b.bytes.slice(0, sz - 8); b.size = sz;
-          H.blocks.push(split); flPush(H, split);
+          H.blocks.push(split); scribble(H, split); flPush(H, split);
         }
       } else {
         b = { chunk: H.top, size: sz, bytes: Array(sz - 8).fill(null), free: true };
         H.top += sz; H.blocks.push(b); how = "top";
       }
     }
-    b.free = false; b.req = n; b.gen = H.nextGen++; b.owner = name; b.leak = false;
+    b.free = false; b.link = null; b.req = n; b.gen = H.nextGen++; b.owner = name; b.leak = false;
     H.vars[name] = user(b); H.gens[name] = b.gen;
     return { b, how, sz, split, leaked };
   }
@@ -338,6 +352,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (b.free) { H.dead = true; H.out.push({ err: "free(): double free detected in tcache 2\nAborted (core dumped)" }); return { kind: "double" }; }
     const stale = b.gen !== H.gens[name];
     const victim = b.owner;
+    scribble(H, b);
     b.free = true; b.owner = null; b.leak = false; flPush(H, b);
     const merged = H.merge ? coalesce(H) : 0;
     return { kind: stale ? "stale" : "ok", b, victim, merged };
@@ -363,7 +378,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (let i = a - user(b); i < b.bytes.length && s.length < 60; i++) {
       const c = b.bytes[i];
       if (c === 0) break;
-      s += c === null ? "�" : String.fromCharCode(c);
+      s += c === null ? "�" : c < 32 || c > 126 ? "·" : String.fromCharCode(c);
     }
     return s;
   }
@@ -406,7 +421,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       else if (b.owner) { lbl = `${esc(b.owner)} · ${b.req} B`; style = vcol(b.owner); }
       else { lbl = `leaked · ${b.req} B`; style = "--bc: var(--bad-soft); --bi: var(--bad);"; }
       const s = readStr(H, user(b));
-      const txt = b.bytes[0] !== null && b.bytes[0] !== undefined ? `"${esc(s)}"` : "";
+      const txt = hasLink(b) ? "link + key" : b.bytes[0] !== null && b.bytes[0] !== undefined ? `"${esc(s)}"` : "";
       const cls = ["blk"];
       if (b.free) cls.push("free");
       if (b.leak) cls.push("leak");
@@ -434,13 +449,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const owner = b.free ? "free block" : b.owner ? `${b.owner}'s block` : "leaked block";
     $("zoomTitle").textContent = `Bytes of the ${owner} at ${sh(user(b))}: ${b.size} bytes = 8 header + ${b.free ? b.size - 8 + " free" : b.req + " requested + " + (b.size - 8 - b.req) + " padding"}`;
     const st = b.free ? "" : b.owner ? vcol(b.owner) : "--bc: var(--bad-soft); --bi: var(--bad);";
-    const h = [];
+    const h = [], lk = hasLink(b);
+    const hit8 = (s) => p && p.size === b.size && [0, 1, 2, 3, 4, 5, 6, 7].some((j) => p.bytes[s + j] !== b.bytes[s + j]);
     for (let r = 0; r < b.size / 16; r++) {
       h.push(`<div class="zr">${sh(b.chunk + 16 * r)}</div>`);
       for (let c = 0; c < 16; c++) {
         const i = r * 16 + c;
         if (i < 8) { if (i === 0) h.push(`<div class="zc hd" style="grid-column: span 8">header: size ${b.size}</div>`); continue; }
         const k = i - 8, v = b.bytes[k];
+        if (lk && k < 16) {
+          if (k === 0 || k === 8) h.push(`<div class="zc lk${hit8(k) ? " hit" : ""}" style="grid-column: span 8" title="Written by free">${k === 0 ? "next free block (encoded)" : "tcache key"}</div>`);
+          continue;
+        }
         const ch = v === null || v === undefined ? "?" : v === 0 ? "\\0" : v < 32 || v > 126 ? "·" : esc(String.fromCharCode(v));
         const cls = ["zc"];
         if (b.free) cls.push("fr"); else if (k >= b.req) cls.push("pd");
@@ -504,11 +524,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       title: "strcpy writes through q",
       msg: "6 bytes go into <code>q</code>'s block: <code>h e l l o \\0</code>. The other 26 requested bytes are still <b>?</b>, because <code>malloc</code> does not clear memory." },
     { lines: [4], ops: (H) => free(H, "q"), zoom: "q",
-      title: "free gives the block back, and changes nothing else",
-      msg: "The block goes onto the allocator's 48-byte free list, ready for reuse. In this model <code>\"hello\"</code> is not erased. <code>free</code> also cannot change <code>q</code>: <code>q</code> is your variable, passed by value. <code>q</code> still holds an address that is no longer yours. It is a <b>dangling pointer</b>, and it looks no different from a good one." },
+      title: "free gives the block back, and leaves q alone",
+      msg: "The block goes onto the allocator's 48-byte free list, ready for reuse. glibc keeps that list inside the free blocks themselves: <code>free</code> writes a link to the next free block of this size, and a key it uses to catch double frees, into the first 16 bytes. That is where <code>\"hello\"</code> was, so it is gone. What <code>free</code> cannot change is <code>q</code>: <code>q</code> is your variable, passed by value. <code>q</code> still holds an address that is no longer yours. It is a <b>dangling pointer</b>, and it looks no different from a good one." },
     { lines: [5], ops: (H) => malloc(H, "s", 32), zoom: "s",
       title: "The next request of that size gets the same block",
-      msg: "<code>malloc(32)</code> needs a 48-byte block, and the 48-byte free list has one. So <span class=\"math\">s == q</span>. Notice the old <code>\"hello\"</code> is still there: <code>malloc</code> hands you whatever was in the block." },
+      msg: "<code>malloc(32)</code> needs a 48-byte block, and the 48-byte free list has one. So <span class=\"math\">s == q</span>. <code>malloc</code> clears the key, but the first 8 bytes still hold the old link. <code>malloc</code> hands you whatever was in the block; it never cleans it." },
     { lines: [6], ops: (H) => strcpy(H, "s", "secret"), zoom: "s",
       title: "s stores its data",
       msg: "<code>s</code> owns this block now, and writes <code>\"secret\"</code> into it. As far as <code>s</code> knows, nobody else can see these bytes." },
@@ -600,7 +620,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       ltitle = `${name} = ${hex(user(r.b))}`;
       const math = `<span class="math">8 + ${n} = ${n + 8} → ${r.sz}</span>`;
       lmsg = r.how === "reuse"
-        ? `${math}. The ${r.sz}-byte free list had a block, so <code>malloc</code> reused it. Whatever was in it is still there.`
+        ? `${math}. The ${r.sz}-byte free list had a block, so <code>malloc</code> reused it. It clears the key, but everything else in the block is still there, including the old link.`
         : r.how === "fit"
           ? `${math}. No ${r.sz}-byte block on a free list, so <code>malloc</code> took the first free block big enough.${r.split ? ` It split off the unused ${r.split.size} bytes as a new free block.` : ` The leftover would be under 32 bytes, so ${name} gets the whole ${r.b.size}-byte block.`}`
           : `${math}. Nothing on the free lists fits, so the block comes from the top of the heap, which moves up by ${r.sz}.`;

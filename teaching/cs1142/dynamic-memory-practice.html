@@ -473,7 +473,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   EX.practice = [
     {
       label: "Fix make()",
-      question: "<b>Four things wrong.</b> <code>make</code> compiles with a warning and returns garbage. Name the fault, fix it with <code>malloc</code>, and say who must free the result.",
+      question: "<b>One thing wrong.</b> <code>make</code> compiles with a warning and returns garbage. Name the fault, fix it with <code>malloc</code>, and say who must free the result.",
       steps: [
         { code: "MAKE_Q", lines: [], ops: (M) => setVar(M, "v", { k: "ptr", v: undefined, t: "int *" }),
           title: "Predict before you step",
