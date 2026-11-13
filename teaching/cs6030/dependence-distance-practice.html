@@ -79,6 +79,9 @@ code, .mono { font-family: var(--font-mono); }
 .q p { margin: 0 0 12px; color: var(--muted); }
 .ans { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font: 600 1.4rem var(--font-mono); }
 .ans label { display: inline-flex; flex-direction: column; align-items: center; font: 500 .7rem var(--font-sans); color: var(--muted); gap: 2px; }
+.ans + .ans { margin-top: 10px; }
+.ans .rl { font: 600 .72rem var(--font-sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); width: 82px; }
+.ans select { width: 64px; font: 600 1.2rem var(--font-mono); text-align: center; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .ans input { width: 64px; font: 600 1.2rem var(--font-mono); text-align: center; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
 .btn { font: 500 .9rem var(--font-sans); padding: 8px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
@@ -114,7 +117,7 @@ table.sum th, table.sum td { text-align: left; padding: 6px 8px; border-bottom: 
 table.sum th { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
 table.sum td.v { font-family: var(--font-mono); font-weight: 600; }
 .sumwrap { overflow-x: auto; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hidden { display: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (max-width: 520px) { header h1 { font-size: 1.4rem; } .code { font-size: .8rem; } }
@@ -125,9 +128,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   <header>
     <div class="kick">CS 6030 · Lecture 1 · Dependence Analysis</div>
     <h1>Dependence Distance Practice</h1>
-    <p>Find the distance vector of every true, anti and input dependence in the loop below. The loops run with
-      <code>J</code> outermost, so each vector is written <span class="vec">⟨d<sub>J</sub>, d<sub>I</sub>⟩</span>: the iteration of the
-      sink minus the iteration of the source. There are no output dependences, because every iteration stores to a
+    <p>Find the distance and direction vectors of every true, anti and input dependence in the loop below. The
+      loops run with <code>J</code> outermost, so each vector lists the <code>J</code> entry first. The distance
+      <span class="vec">⟨d<sub>J</sub>, d<sub>I</sub>⟩</span> is the iteration of the sink minus the iteration of the source; each
+      direction entry is <span class="vec">&lt;</span> when that distance is positive, <span class="vec">=</span> when it is zero and
+      <span class="vec">&gt;</span> when it is negative. There are no output dependences, because every iteration stores to a
       different element.</p>
   </header>
 
@@ -145,10 +150,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <p id="qhint"></p>
         <form id="form" autocomplete="off">
           <div class="ans">
+            <span class="rl">Distance</span>
             ⟨
             <label><span>d<sub>J</sub></span><input id="dj" inputmode="numeric" aria-label="Distance in J"></label>
             ,
             <label><span>d<sub>I</sub></span><input id="di" inputmode="numeric" aria-label="Distance in I"></label>
+            ⟩
+          </div>
+          <div class="ans">
+            <span class="rl">Direction</span>
+            ⟨
+            <label><span>J</span><select id="vj" aria-label="Direction in J"><option value="">?</option><option>&lt;</option><option>=</option><option>&gt;</option></select></label>
+            ,
+            <label><span>I</span><select id="vi" aria-label="Direction in I"><option value="">?</option><option>&lt;</option><option>=</option><option>&gt;</option></select></label>
             ⟩
           </div>
           <div class="controls">
@@ -228,6 +242,9 @@ Q.forEach(q => { q.state = "open"; q.tries = 0; });
 
 const $ = id => document.getElementById(id);
 const vec = d => `⟨${d[0]}, ${d[1]}⟩`;
+const dirOf = d => d.map(x => (x > 0 ? "<" : x < 0 ? ">" : "="));
+const esc = c => (c === "<" ? "&lt;" : c === ">" ? "&gt;" : c);
+const dvec = v => `⟨${esc(v[0])}, ${esc(v[1])}⟩`;
 const name = r => (REFS[r].store ? "the store " : "the load ") + `<code>${REFS[r].text}</code><sub>${r}</sub>`;
 const plain = r => `${REFS[r].text}${r === "W" ? " (store)" : r === "R5" ? " (load)" : ""}`;
 const elem = (r, it) => `A(${it.i + REFS[r].a},${it.j + REFS[r].b})`;
@@ -346,6 +363,11 @@ function animate(q) {
   });
   later(ms += 1400, () => narrate("4 · distance", `Distance = sink − source = <span class="vec">(${t.j}−${s.j}, ${t.i}−${s.i})</span> = ` +
         `<span class="vec">${vec(q.d)}</span>. ` + carried(q.d)));
+  later(ms += 2600, () => {
+    const v = dirOf(q.d), why = x => (x > 0 ? "positive, so &lt;" : x < 0 ? "negative, so &gt;" : "zero, so =");
+    narrate("5 · direction", `Direction: d<sub>J</sub> = ${q.d[0]} is ${why(q.d[0])}; d<sub>I</sub> = ${q.d[1]} is ${why(q.d[1])}. ` +
+            `The direction vector is <span class="vec">${dvec(v)}</span>.`);
+  });
   $("replayBtn").disabled = false;
 }
 function carried(d) {
@@ -394,17 +416,22 @@ function go(n) {
     anti: "An anti dependence goes from a load to a later store of the same element.",
     input: "An input dependence goes from one load to a later load of the same element. Decide which load touches the element first.",
   }[q.kind];
-  $("dj").value = ""; $("di").value = "";
+  setFields(null);
   $("fb").className = "fb hidden";
-  if (q.state !== "open") { $("dj").value = q.d[0]; $("di").value = q.d[1]; feedback(q, true); animate(q); }
+  if (q.state !== "open") { setFields(q); feedback(q, true); animate(q); }
   refreshChips();
   $("dj").focus({ preventScroll: true });
+}
+function setFields(q) {
+  const v = q ? dirOf(q.d) : ["", ""];
+  $("dj").value = q ? q.d[0] : ""; $("di").value = q ? q.d[1] : "";
+  $("vj").value = v[0]; $("vi").value = v[1];
 }
 function feedback(q, revisit) {
   const fb = $("fb");
   fb.className = "fb " + (q.state === "right" ? "good" : "info");
   fb.innerHTML = (q.state === "right" ? "Correct. " : "The answer is shown. ") +
-    `${KINDS[q.kind]} dependence from <b>${q.src}</b> to <b>${q.snk}</b> with distance <b>${vec(q.d)}</b>.`;
+    `${KINDS[q.kind]} dependence from <b>${q.src}</b> to <b>${q.snk}</b> with distance <b>${vec(q.d)}</b> and direction <b>${dvec(dirOf(q.d))}</b>.`;
 }
 $("form").addEventListener("submit", e => {
   e.preventDefault();
@@ -413,25 +440,34 @@ $("form").addEventListener("submit", e => {
   if (!/^-?\d+$/.test(dj) || !/^-?\d+$/.test(di)) {
     fb.className = "fb bad"; fb.textContent = "Enter a whole number in each box."; return;
   }
-  const a = [+dj, +di];
-  if (a[0] === q.d[0] && a[1] === q.d[1]) {
+  const vj = $("vj").value, vi = $("vi").value;
+  if (!vj || !vi) { fb.className = "fb bad"; fb.textContent = "Choose a direction for each loop."; return; }
+  const a = [+dj, +di], v = dirOf(q.d);
+  const distOK = a[0] === q.d[0] && a[1] === q.d[1], dirOK = vj === v[0] && vi === v[1];
+  if (distOK && dirOK) {
     if (q.state === "open") q.state = "right";
     feedback(q); animate(q); refreshChips(); return;
   }
   q.tries++;
   fb.className = "fb bad";
+  const more = q.tries >= 2 ? " You can also use Show answer." : "";
+  if (distOK) {
+    fb.innerHTML = `The distance is right, but the direction is not. Each direction entry is &lt; when that distance is positive, = when it is zero and &gt; when it is negative.` + more;
+    return;
+  }
+  const dirNote = dirOK ? " The direction is right." : "";
   if (a[0] === -q.d[0] && a[1] === -q.d[1] && !isZero(q.d))
     fb.innerHTML = `<b>${vec(a)}</b> is the vector from ${q.snk} to ${q.src}, which goes backward in time: its first nonzero entry is negative. Which reference touches the element first?`;
   else if (!lexPos(a) && !isZero(a))
     fb.innerHTML = `A distance vector cannot have a negative first nonzero entry: the sink would run before the source. Try again.`;
   else
-    fb.innerHTML = `Not quite. Pick an iteration (J, I), find the element the first reference touches, and find the iteration where the other reference touches it.` +
-      (q.tries >= 2 ? " You can also use Show answer." : "");
+    fb.innerHTML = `Not quite. Pick an iteration (J, I), find the element the first reference touches, and find the iteration where the other reference touches it.`;
+  fb.innerHTML += dirNote + more;
 });
 $("showBtn").addEventListener("click", () => {
   const q = Q[cur];
   if (q.state === "open") q.state = "shown";
-  $("dj").value = q.d[0]; $("di").value = q.d[1];
+  setFields(q);
   feedback(q); animate(q); refreshChips();
 });
 $("prevBtn").addEventListener("click", () => go(cur - 1));
@@ -440,9 +476,9 @@ $("replayBtn").addEventListener("click", () => animate(Q[cur]));
 
 function showSummary() {
   $("summary").classList.remove("hidden");
-  $("sumtab").innerHTML = `<thead><tr><th>Type</th><th>Source</th><th>Sink</th><th>Distance</th><th>Carried by</th></tr></thead><tbody>` +
+  $("sumtab").innerHTML = `<thead><tr><th>Type</th><th>Source</th><th>Sink</th><th>Distance</th><th>Direction</th><th>Carried by</th></tr></thead><tbody>` +
     Q.map(q => `<tr><td>${KINDS[q.kind]}</td><td><code>${plain(q.src)}</code></td><td><code>${plain(q.snk)}</code></td>` +
-      `<td class="v">${vec(q.d)}</td><td>${isZero(q.d) ? "loop independent" : q.d[0] ? "J (level 1)" : "I (level 2)"}</td></tr>`).join("") +
+      `<td class="v">${vec(q.d)}</td><td class="v">${dvec(dirOf(q.d))}</td><td>${isZero(q.d) ? "loop independent" : q.d[0] ? "J (level 1)" : "I (level 2)"}</td></tr>`).join("") +
     `</tbody>`;
 }
 
