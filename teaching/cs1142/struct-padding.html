@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Struct Padding Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: code + editor on the left, byte-addressed memory grid + narration on the right; one row of 8 bytes = one 8-byte word */
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #18202c;
+  --muted: #586274;
+  --line: #d6dce5;
+  --empty: #eaeef3;
+  --accent: #d6455d;          /* "next free byte" cursor */
+  --char-bg: #f6c453; --char-ink: #3b2a00;
+  --int-bg:  #63b8dc; --int-ink:  #06283a;
+  --long-bg: #a891ec; --long-ink: #1f1150;
+  --pad-a: #e2e6ec; --pad-b: #f7f8fa; --pad-ink: #7a8394;
+  --focus-line: #fff4d6;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+    --accent: #ff6b81;
+    --char-bg: #d9a531; --char-ink: #1d1400;
+    --int-bg:  #3c9ac2; --int-ink:  #031620;
+    --long-bg: #8a72db; --long-ink: #0f0730;
+    --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8;
+    --focus-line: #2c2a1c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+  --accent: #ff6b81;
+  --char-bg: #d9a531; --char-ink: #1d1400;
+  --int-bg:  #3c9ac2; --int-ink:  #031620;
+  --long-bg: #8a72db; --long-ink: #0f0730;
+  --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8;
+  --focus-line: #2c2a1c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.5 var(--font-sans);
+}
+.wrap {
+  max-width: 1240px; margin: 0 auto;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+header h1 { margin: 0; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+code, .mono { font-family: var(--font-mono); }
+
+/* presets */
+.presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.presets .lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 4px; }
+.chip-btn {
+  font: 500 .9rem var(--font-sans); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.chip-btn small { color: var(--muted); font-family: var(--font-mono); margin-left: 6px; }
+.chip-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip-btn[aria-pressed="true"] small { color: var(--bg); opacity: .75; }
+
+.main { display: grid; grid-template-columns: minmax(0, 430px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel h2 { margin: 0 0 10px; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+/* code */
+.code { font: 500 .98rem/1.75 var(--font-mono); overflow-x: auto; white-space: pre; }
+.code .ln { padding: 0 8px; border-radius: 4px; transition: background .25s; }
+.code .ln.focus { background: var(--focus-line); }
+.code .cm { color: var(--muted); font-weight: 400; }
+.code .cm.pad { color: var(--accent); }
+.code .ty { font-weight: 600; }
+.code .ty.char { color: var(--char-ink); background: var(--char-bg); border-radius: 3px; padding: 0 3px; }
+.code .ty.int  { color: var(--int-ink);  background: var(--int-bg);  border-radius: 3px; padding: 0 3px; }
+.code .ty.long { color: var(--long-ink); background: var(--long-bg); border-radius: 3px; padding: 0 3px; }
+.code .appear { animation: fadein .35s ease both; }
+
+/* legend */
+.legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: .88rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 16px; height: 16px; border-radius: 4px; display: inline-block; }
+.sw.char { background: var(--char-bg); } .sw.int { background: var(--int-bg); } .sw.long { background: var(--long-bg); }
+.sw.pad { background: repeating-linear-gradient(45deg, var(--pad-a) 0 4px, var(--pad-b) 4px 8px); border: 1px solid var(--line); }
+
+/* editor */
+.fields { display: flex; flex-direction: column; gap: 6px; }
+.frow { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; }
+.frow select, .frow input {
+  font: 500 .95rem var(--font-mono); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; min-width: 0; width: 100%;
+}
+.icon-btn {
+  font: 500 .9rem var(--font-sans); width: 30px; height: 30px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+}
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.add-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.btn {
+  font: 500 .9rem var(--font-sans); padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+}
+.btn .mono { font-weight: 600; }
+.btn:disabled { opacity: .4; cursor: default; }
+.hint { font-size: .82rem; color: var(--muted); margin: 8px 0 0; }
+
+/* memory grid */
+.mem-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.mem-scroll { overflow-x: auto; padding-top: 14px; }
+.mem { display: grid; grid-template-columns: 48px repeat(8, minmax(44px, 1fr)); row-gap: 16px; min-width: 420px; }
+.colhead { font: 500 .72rem var(--font-mono); color: var(--muted); text-align: center; padding-bottom: 2px; }
+.rowlbl { font: 500 .8rem var(--font-mono); color: var(--muted); display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; }
+.cell { position: relative; height: 62px; padding: 3px; }
+.cell.cl { padding-left: 0; } .cell.cr { padding-right: 0; }
+.chip {
+  height: 100%; border-radius: 7px; position: relative;
+  display: flex; flex-direction: column; justify-content: space-between; padding: 4px 6px;
+  font-family: var(--font-mono); overflow: hidden;
+}
+.cell.cl .chip { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cell.cr .chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.chip .off { font-size: .68rem; opacity: .7; line-height: 1; }
+.chip .nm { font-size: .95rem; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+.chip .ty { font-size: .64rem; opacity: .8; line-height: 1; white-space: nowrap; }
+.empty .chip { background: var(--empty); color: var(--muted); }
+.empty.legal .chip { box-shadow: inset 0 0 0 2px var(--mark); }
+.empty.legal .chip::after {
+  content: "✓"; position: absolute; right: 6px; bottom: 4px; font: 600 .8rem var(--font-sans); color: var(--mark);
+}
+.empty.illegal .chip { opacity: .55; }
+.f-char .chip { background: var(--char-bg); color: var(--char-ink); }
+.f-int  .chip { background: var(--int-bg);  color: var(--int-ink); }
+.f-long .chip { background: var(--long-bg); color: var(--long-ink); }
+.pad .chip, .tail .chip {
+  background: repeating-linear-gradient(45deg, var(--pad-a) 0 6px, var(--pad-b) 6px 12px);
+  color: var(--pad-ink); box-shadow: inset 0 0 0 1px var(--line);
+}
+.tail .chip { background: repeating-linear-gradient(-45deg, var(--pad-a) 0 6px, var(--pad-b) 6px 12px); }
+.pad .nm, .tail .nm { font-size: .78rem; font-weight: 500; }
+.second .chip { opacity: .5; }
+.outside .chip { background: transparent; border: 1px dashed var(--line); color: var(--muted); opacity: .5; }
+.cell.hl .chip { outline: 3px solid var(--accent); outline-offset: -1px; }
+.cursor::before {
+  content: ""; position: absolute; left: 50%; top: -12px; transform: translateX(-50%);
+  border: 7px solid transparent; border-top: 9px solid var(--accent); border-bottom: 0;
+}
+.cursor .chip { box-shadow: inset 0 0 0 2px var(--accent); }
+.tag {
+  position: absolute; top: -17px; left: calc(50% + 10px); font: 600 .66rem var(--font-sans); color: var(--accent);
+  white-space: nowrap; letter-spacing: .02em; z-index: 2;
+}
+.enter .chip { animation: drop .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+.pad.enter .chip, .tail.enter .chip { animation: wipe .4s ease both; }
+@keyframes drop { from { transform: translateY(-18px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+/* narration */
+.narr { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.narr .count { font: 500 .75rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.narr h3 { margin: 0; font-size: 1.3rem; line-height: 1.3; text-wrap: balance; }
+.narr p { margin: 0; font-size: 1.05rem; max-width: 70ch; }
+.narr code { background: var(--empty); padding: 0 4px; border-radius: 4px; font-size: .95em; }
+.math { font-family: var(--font-mono); font-weight: 600; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; min-width: 120px; }
+.stat .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat .v { font: 600 1.4rem var(--font-mono); font-variant-numeric: tabular-nums; }
+.stat.big { border-color: var(--ink); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+.controls .btn { padding: 8px 14px; }
+.controls .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 96px; }
+.speed { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); margin-left: auto; }
+.keys { font-size: .8rem; color: var(--muted); }
+kbd { font: 500 .75rem var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel); }
+
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) {
+  .cell { height: 50px; }
+  .chip .ty { display: none; }
+  header h1 { font-size: 1.4rem; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Struct Padding Explorer</h1>
+    <p>Step through how the C compiler lays out a <code>struct</code> on x86-64. Each row of the grid is 8 bytes of memory. Watch where padding goes and why <code>sizeof</code> is often bigger than the fields added together.</p>
+  </header>
+
+  <div class="presets" id="presets"><span class="lbl">Examples</span></div>
+
+  <div class="main">
+    <div class="left">
+      <section class="panel">
+        <h2>Declaration</h2>
+        <div class="code" id="code"></div>
+      </section>
+      <section class="panel">
+        <h2>Edit fields</h2>
+        <div class="fields" id="fields"></div>
+        <div class="add-row">
+          <button class="btn" data-add="char">+ <span class="mono">char</span></button>
+          <button class="btn" data-add="int">+ <span class="mono">int</span></button>
+          <button class="btn" data-add="long">+ <span class="mono">long</span></button>
+          <button class="btn" id="sortBtn" title="Reorder fields from largest alignment to smallest">Sort largest first</button>
+        </div>
+        <p class="hint">Up to 8 fields. Any change restarts the animation.</p>
+      </section>
+      <section class="panel">
+        <h2>Alignment rules (x86-64)</h2>
+        <div class="legend">
+          <span><i class="sw char"></i><code>char</code> 1 byte, any offset</span>
+          <span><i class="sw int"></i><code>int</code> 4 bytes, offset % 4 == 0</span>
+          <span><i class="sw long"></i><code>long</code> 8 bytes, offset % 8 == 0</span>
+          <span><i class="sw pad"></i>padding (unused, garbage)</span>
+        </div>
+        <p class="hint">The whole struct is aligned like its strictest member, so its size is rounded up to a multiple of that alignment.</p>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="mem-head">
+        <h2 style="margin:0">Memory, offsets from the start of the struct</h2>
+        <span class="keys"><kbd>→</kbd> step &nbsp;<kbd>←</kbd> back &nbsp;<kbd>space</kbd> play &nbsp;<kbd>R</kbd> restart</span>
+      </div>
+      <div class="mem-scroll"><div class="mem" id="mem"></div></div>
+
+      <div class="narr" aria-live="polite">
+        <span class="count" id="count"></span>
+        <h3 id="ntitle"></h3>
+        <p id="nmsg"></p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Field bytes</div><div class="v" id="sFields">0</div></div>
+        <div class="stat"><div class="k">Padding bytes</div><div class="v" id="sPad">0</div></div>
+        <div class="stat big"><div class="k" id="sTotalK">Bytes used so far</div><div class="v" id="sTotal">0</div></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="resetBtn">Restart</button>
+        <button class="btn" id="backBtn">◀ Back</button>
+        <button class="btn primary" id="playBtn">▶ Play</button>
+        <button class="btn" id="stepBtn">Step ▶</button>
+        <label class="speed" for="speed">Speed <input type="range" id="speed" min="0.5" max="3" step="0.25" value="1"></label>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  const SIZE = { char: 1, int: 4, long: 8 };
+  const PRESETS = [
+    { tag: "A", label: "struct A", fields: [["char", "c"], ["int", "i"], ["char", "d"]] },
+    { tag: "B", label: "struct B", fields: [["int", "i"], ["char", "c"], ["char", "d"]] },
+    { tag: "C", label: "char + long", fields: [["char", "c"], ["long", "l"]] },
+    { tag: "D", label: "Mixed, as written", fields: [["char", "a"], ["long", "b"], ["char", "c"], ["int", "d"]] },
+    { tag: "E", label: "Mixed, largest first", fields: [["long", "b"], ["int", "d"], ["char", "a"], ["char", "c"]] },
+  ];
+  const MAX_FIELDS = 8;
+  const $ = (id) => document.getElementById(id);
+
+  let structName = "A";
+  let fields = [];
+  let L = null, steps = [], cells = [];
+  let step = 0, prevStep = -1;
+  let timer = null;
+  let activePreset = 0;
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const range = (a, b) => (a === b ? `byte ${a}` : `bytes ${a}–${b}`);
+  const bytes = (n) => `${n} byte${n === 1 ? "" : "s"}`;
+  const art = (t) => (t === "int" ? "an" : "a");
+
+  function computeLayout(fs) {
+    let off = 0, maxA = 1;
+    const items = fs.map((f, i) => {
+      const a = SIZE[f.type], s = SIZE[f.type];
+      const pad = (a - (off % a)) % a, start = off + pad;
+      const it = { i, type: f.type, name: f.name, size: s, align: a, before: off, pad, start };
+      off = start + s; maxA = Math.max(maxA, a);
+      return it;
+    });
+    const tail = (maxA - (off % maxA)) % maxA;
+    const sum = items.reduce((t, x) => t + x.size, 0);
+    return { items, end: off, maxA, tail, total: off + tail, sum };
+  }
+
+  function buildCells(L) {
+    const c = [];
+    L.items.forEach((it, k) => {
+      for (let j = 0; j < it.pad; j++) c.push({ kind: "pad", k, first: j === 0, last: j === it.pad - 1 });
+      for (let j = 0; j < it.size; j++) c.push({ kind: "field", k, type: it.type, name: it.name, first: j === 0, last: j === it.size - 1 });
+    });
+    for (let j = 0; j < L.tail; j++) c.push({ kind: "tail", k: -1, first: j === 0, last: j === L.tail - 1 });
+    return c;
+  }
+
+  function buildSteps(L) {
+    const S = [];
+    let n = 0;
+    S.push({
+      n, cursor: 0, focus: -1, placed: 0, padFor: -1, mark: 0,
+      title: "Start at offset 0",
+      msg: `The compiler places fields <b>in the order you declare them</b>; it never reorders them. Each type has an alignment: <code>char</code> 1, <code>int</code> 4, <code>long</code> 8. A field must start at an offset that is a multiple of its alignment. The red arrow marks the next free byte.`,
+    });
+    L.items.forEach((it, k) => {
+      const t = `<code>${it.type} ${esc(it.name)}</code>`;
+      if (it.pad > 0) {
+        S.push({
+          n, cursor: it.before, focus: k, placed: k, padFor: -1, mark: it.align, markType: it.type,
+          title: `Can ${it.type} ${esc(it.name)} start at offset ${it.before}?`,
+          msg: `The next free byte is <b>${it.before}</b>. ${art(it.type)[0].toUpperCase() + art(it.type).slice(1)} ${it.type} needs an offset that is a multiple of ${it.align}: <span class="math">${it.before} % ${it.align} = ${it.before % it.align}</span>, so <b>no</b>. The ✓ cells are the offsets where ${t} is allowed to start. The nearest one is <b>${it.start}</b>.`,
+        });
+        n += it.pad;
+        S.push({
+          n, cursor: it.start, focus: k, placed: k, padFor: k, mark: it.align, markType: it.type, newPad: true,
+          title: `Insert ${bytes(it.pad)} of padding`,
+          msg: `The compiler skips ${range(it.before, it.start - 1)}. These bytes belong to the struct and count toward <code>sizeof</code>, but no field uses them, so they hold leftover garbage. Now the next free byte is <span class="math">${it.start}</span>, and <span class="math">${it.start} % ${it.align} = 0</span>.`,
+        });
+      }
+      n += it.size;
+      S.push({
+        n, cursor: it.start + it.size, focus: k, placed: k + 1, padFor: -1, mark: 0,
+        title: `Place ${it.type} ${esc(it.name)} at offset ${it.start}`,
+        msg: (it.pad > 0
+          ? `${t} now sits on a legal boundary and fills ${range(it.start, it.start + it.size - 1)}.`
+          : `<span class="math">${it.start} % ${it.align} = 0</span>, so no padding is needed. ${t} fills ${range(it.start, it.start + it.size - 1)}.`) +
+          ` The next free byte is ${it.start + it.size}.`,
+      });
+    });
+    const big = L.items.find((x) => x.align === L.maxA);
+    S.push({
+      n: n + L.tail, cursor: L.tail ? L.total : L.end, focus: -2, placed: L.items.length, padFor: -1, tailShown: true,
+      mark: L.tail ? L.maxA : 0, markType: big ? big.type : "char", newPad: L.tail > 0,
+      title: L.tail ? `Round the size up to a multiple of ${L.maxA}` : `The size is already a multiple of ${L.maxA}`,
+      msg: `The struct is aligned like its strictest member, <code>${big ? big.type + " " + esc(big.name) : "char"}</code>, so its alignment is <b>${L.maxA}</b>. The fields end at offset ${L.end}. ` +
+        (L.tail
+          ? `<span class="math">${L.end} % ${L.maxA} = ${L.end % L.maxA}</span>, so the compiler adds <b>${bytes(L.tail)} of trailing padding</b> at the end.`
+          : `<span class="math">${L.end} % ${L.maxA} = 0</span>, so no trailing padding is needed.`),
+    });
+    const padTotal = L.total - L.sum;
+    S.push({
+      n: n + L.tail, cursor: -1, focus: -2, placed: L.items.length, padFor: -1, tailShown: true, summary: true, mark: 0,
+      title: `sizeof(struct ${esc(structName)}) is ${L.total}`,
+      msg: `The fields add up to <b>${L.sum}</b> bytes, but the struct takes <b>${L.total}</b>. ` +
+        (padTotal
+          ? `${bytes(padTotal)} (${Math.round((100 * padTotal) / L.total)}%) are padding. Try <b>Sort largest first</b> to see whether reordering the fields shrinks it.`
+          : `There is no padding at all, because every field already landed on a legal offset.`) +
+        ` Always write <code>sizeof(struct ${esc(structName)})</code>; never add up the fields yourself.`,
+    });
+    let arrMsg = `In <code>struct ${esc(structName)} s[2]</code>, element <code>s[1]</code> starts right after <code>s[0]</code>, at offset <b>${L.total}</b>. Because ${L.total} is a multiple of ${L.maxA}, every field of <code>s[1]</code> also lands on a legal offset.`;
+    if (L.tail && big) {
+      const bad = L.end + big.start;
+      arrMsg += ` Without the trailing padding, <code>s[1]</code> would start at ${L.end} and <code>s[1].${esc(big.name)}</code> would sit at offset ${bad}, and <span class="math">${bad} % ${big.align} = ${bad % big.align}</span>. That is why the padding is there.`;
+    }
+    S.push({
+      n: n + L.tail, cursor: -1, focus: -2, placed: L.items.length, padFor: -1, tailShown: true, summary: true, array: true, mark: 0,
+      title: "Why trailing padding? Look at an array",
+      msg: arrMsg,
+    });
+    return S;
+  }
+
+  /* ---------- rendering ---------- */
+  function renderCode(st) {
+    const out = [];
+    const nameW = Math.max(...fields.map((f) => f.type.length + 1 + f.name.length + 1), 8);
+    const line = (html, plainLen, comment, cls, isNew) => {
+      const padSp = " ".repeat(Math.max(2, nameW + 6 - plainLen));
+      out.push(`<div class="ln${cls ? " " + cls : ""}">${html}${comment ? padSp + `<span class="cm${comment.pad ? " pad" : ""}${isNew ? " appear" : ""}">// ${comment.text}</span>` : ""}</div>`);
+    };
+    line(`struct ${esc(structName)} {`, 0, null);
+    L.items.forEach((it, k) => {
+      if (it.pad > 0 && (st.placed > k || st.padFor === k)) {
+        line("", 0, { text: `${bytes(it.pad)} padding`, pad: true }, st.padFor === k ? "focus" : "", st.padFor === k && st.newPad && fwd());
+      }
+      const decl = `    <span class="ty ${it.type}">${it.type}</span> ${esc(it.name)};`;
+      const plain = 4 + it.type.length + 1 + it.name.length + 1;
+      const cm = st.placed > k ? { text: `offset ${it.start}, ${bytes(it.size)}` } : null;
+      line(decl, plain, cm, st.focus === k ? "focus" : "", st.placed === k + 1 && st.focus === k && fwd());
+    });
+    if (st.tailShown && L.tail) line("", 0, { text: `${bytes(L.tail)} trailing padding`, pad: true }, st.focus === -2 && !st.summary ? "focus" : "", st.newPad && fwd());
+    line("};", 2, st.summary ? { text: `sizeof = ${L.total}` } : null, st.summary && !st.array ? "focus" : "", st.summary && !st.array && fwd());
+    if (st.array) {
+      out.push(`<div class="ln"> </div>`);
+      line(`struct ${esc(structName)} s[2];`, 11 + structName.length, { text: `sizeof(s) = ${2 * L.total}` }, "focus", fwd());
+    }
+    $("code").innerHTML = out.join("");
+  }
+
+  const fwd = () => step === prevStep + 1;
+
+  function renderMem(st) {
+    const shown = st.array ? 2 * L.total : L.total;
+    const rows = Math.max(1, Math.ceil(Math.max(shown, 8) / 8));
+    const html = ['<div></div>'];
+    for (let c = 0; c < 8; c++) html.push(`<div class="colhead">+${c}</div>`);
+    const prevN = prevStep >= 0 && fwd() ? steps[prevStep].n : st.n;
+    const entering = (i) => fwd() && i >= prevN && i < st.n;
+    let delay = 0;
+    for (let r = 0; r < rows; r++) {
+      html.push(`<div class="rowlbl">${r * 8}</div>`);
+      for (let c = 0; c < 8; c++) {
+        const i = r * 8 + c;
+        let cls = "cell", inner = "", style = "", tag = "";
+        let cell = null, second = false;
+        if (i < st.n) cell = cells[i];
+        else if (st.array && i >= L.total && i < 2 * L.total) { cell = cells[i - L.total]; second = true; }
+
+        if (cell) {
+          if (cell.kind === "field") {
+            cls += ` f-${cell.type}`;
+            inner = `<span class="off">${i}</span>${cell.first ? `<span class="nm">${second ? "s[1]." : ""}${esc(cell.name)}</span><span class="ty">${cell.type}</span>` : ""}`;
+          } else {
+            cls += cell.kind === "tail" ? " tail" : " pad";
+            inner = `<span class="off">${i}</span>${cell.first ? `<span class="nm">pad</span>` : ""}`;
+          }
+          if (!cell.first && c !== 0) cls += " cl";
+          if (!cell.last && c !== 7) cls += " cr";
+          if (second) cls += " second";
+          const isNew = entering(i) || (st.array && second && fwd());
+          if (isNew) {
+            html.push(`<div class="${cls} enter"><div class="chip" style="animation-delay:${(delay++ * 0.06).toFixed(2)}s">${inner}</div>${cellTag(i, st)}</div>`);
+            continue;
+          }
+        } else {
+          const inStruct = i < (st.array ? 2 * L.total : L.total);
+          cls += inStruct ? " empty" : " empty outside";
+          if (st.mark && i >= st.cursor && i < st.cursor + 16) {
+            if (i % st.mark === 0) { cls += " legal"; style = `--mark: var(--${st.markType}-bg)`; }
+            else cls += " illegal";
+          }
+          inner = `<span class="off">${i}</span>`;
+        }
+        if (i === st.cursor) cls += " cursor";
+        html.push(`<div class="${cls}" style="${style}"><div class="chip">${inner}</div>${cellTag(i, st)}</div>`);
+      }
+    }
+    $("mem").innerHTML = html.join("");
+  }
+
+  function cellTag(i, st) {
+    if (i === st.cursor && !st.array) return `<span class="tag">next free</span>`;
+    if (st.array && i === 0) return `<span class="tag">s[0]</span>`;
+    if (st.array && i === L.total) return `<span class="tag">s[1] starts here</span>`;
+    return "";
+  }
+
+  function renderStats(st) {
+    let fb = 0, pb = 0;
+    for (let i = 0; i < st.n; i++) (cells[i].kind === "field" ? fb++ : pb++);
+    $("sFields").textContent = fb;
+    $("sPad").textContent = pb;
+    $("sTotalK").textContent = st.summary ? `sizeof(struct ${structName})` : "Bytes used so far";
+    $("sTotal").textContent = st.n;
+  }
+
+  function render() {
+    const st = steps[step];
+    renderCode(st);
+    renderMem(st);
+    renderStats(st);
+    $("count").textContent = `Step ${step + 1} of ${steps.length}`;
+    $("ntitle").innerHTML = st.title;
+    $("nmsg").innerHTML = st.msg;
+    $("backBtn").disabled = step === 0;
+    $("stepBtn").disabled = step === steps.length - 1;
+    prevStep = step;
+  }
+
+  function renderEditor() {
+    const box = $("fields");
+    box.innerHTML = fields.map((f, i) => `
+      <div class="frow">
+        <select id="ft${i}" data-i="${i}" aria-label="Type of field ${i + 1}">
+          ${["char", "int", "long"].map((t) => `<option${t === f.type ? " selected" : ""}>${t}</option>`).join("")}
+        </select>
+        <input id="fn${i}" data-i="${i}" value="${esc(f.name)}" aria-label="Name of field ${i + 1}" maxlength="10" spellcheck="false">
+        <button class="icon-btn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
+        <button class="icon-btn" data-down="${i}" ${i === fields.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
+        <button class="icon-btn" data-del="${i}" ${fields.length === 1 ? "disabled" : ""} aria-label="Remove field">×</button>
+      </div>`).join("");
+    document.querySelectorAll("[data-add]").forEach((b) => (b.disabled = fields.length >= MAX_FIELDS));
+    document.querySelectorAll("#presets .chip-btn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === activePreset)));
+  }
+
+  function rebuild(keepEditor) {
+    stop();
+    L = computeLayout(fields);
+    cells = buildCells(L);
+    steps = buildSteps(L);
+    step = 0; prevStep = -1;
+    if (!keepEditor) renderEditor();
+    render();
+  }
+
+  function loadPreset(i) {
+    activePreset = i;
+    const p = PRESETS[i];
+    structName = p.tag;
+    fields = p.fields.map(([type, name]) => ({ type, name }));
+    rebuild();
+  }
+
+  function customized() {
+    if (activePreset !== -1) { activePreset = -1; structName = "S"; }
+    document.querySelectorAll("#presets .chip-btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
+  }
+
+  function uniqueName(type) {
+    const base = type[0];
+    if (!fields.some((f) => f.name === base)) return base;
+    for (let n = 2; ; n++) if (!fields.some((f) => f.name === base + n)) return base + n;
+  }
+
+  /* ---------- playback ---------- */
+  function go(n) { step = Math.max(0, Math.min(steps.length - 1, n)); render(); }
+  function next() { if (step < steps.length - 1) go(step + 1); else stop(); }
+  function back() { stop(); if (step > 0) { prevStep = -5; step -= 1; render(); } }
+  function interval() { return 2600 / parseFloat($("speed").value); }
+  function play() {
+    if (step >= steps.length - 1) { step = 0; prevStep = -1; render(); }
+    $("playBtn").textContent = "❚❚ Pause";
+    timer = setInterval(() => { next(); if (step >= steps.length - 1) stop(); }, interval());
+  }
+  function stop() { if (timer) clearInterval(timer); timer = null; $("playBtn").textContent = "▶ Play"; }
+
+  /* ---------- wiring ---------- */
+  const pBox = $("presets");
+  PRESETS.forEach((p, i) => {
+    const b = document.createElement("button");
+    b.className = "chip-btn";
+    b.innerHTML = `${p.label}<small>${computeLayout(p.fields.map(([type, name]) => ({ type, name }))).total} B</small>`;
+    b.addEventListener("click", () => loadPreset(i));
+    pBox.appendChild(b);
+  });
+
+  $("fields").addEventListener("change", (e) => {
+    const i = +e.target.dataset.i;
+    if (e.target.tagName === "SELECT") { fields[i].type = e.target.value; customized(); rebuild(); }
+  });
+  $("fields").addEventListener("input", (e) => {
+    if (e.target.tagName !== "INPUT") return;
+    const i = +e.target.dataset.i;
+    const clean = e.target.value.replace(/[^A-Za-z0-9_]/g, "");
+    if (clean !== e.target.value) e.target.value = clean;
+    fields[i].name = clean || "x";
+    customized(); rebuild(true);
+  });
+  $("fields").addEventListener("click", (e) => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.dataset.up) { const i = +t.dataset.up; [fields[i - 1], fields[i]] = [fields[i], fields[i - 1]]; }
+    else if (t.dataset.down) { const i = +t.dataset.down; [fields[i + 1], fields[i]] = [fields[i], fields[i + 1]]; }
+    else if (t.dataset.del) { fields.splice(+t.dataset.del, 1); }
+    else return;
+    customized(); rebuild();
+  });
+  document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
+    if (fields.length >= MAX_FIELDS) return;
+    const type = b.dataset.add;
+    fields.push({ type, name: uniqueName(type) });
+    customized(); rebuild();
+  }));
+  $("sortBtn").addEventListener("click", () => {
+    fields = fields.map((f, i) => ({ f, i })).sort((a, b) => SIZE[b.f.type] - SIZE[a.f.type] || a.i - b.i).map((x) => x.f);
+    customized(); rebuild();
+  });
+
+  $("stepBtn").addEventListener("click", () => { stop(); next(); });
+  $("backBtn").addEventListener("click", back);
+  $("resetBtn").addEventListener("click", () => { stop(); step = 0; prevStep = -1; render(); });
+  $("playBtn").addEventListener("click", () => (timer ? stop() : play()));
+  $("speed").addEventListener("input", () => { if (timer) { stop(); play(); } });
+
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); stop(); next(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); back(); }
+    else if (e.key === " " && tag !== "button") { e.preventDefault(); timer ? stop() : play(); }
+    else if (e.key === "r" || e.key === "R") { stop(); step = 0; prevStep = -1; render(); }
+  });
+
+  loadPreset(0);
+})();
+</script>
+
+</body>
+</html>
