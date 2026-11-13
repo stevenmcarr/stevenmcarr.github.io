@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dependence Distance Practice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Code and questions on the left; the iteration space, where the answer is animated, on the right */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #18202c; --muted: #586274; --line: #d6dce5; --empty: #eaeef3;
+  --accent: #d6455d; --ok: #1f8a5a; --ok-soft: #d9f2e6; --bad: #c9334c; --bad-soft: #fbe1e5;
+  --src: #1c7293; --src-soft: #d9eef6; --src-ink: #ffffff;
+  --snk: #b26a00; --snk-soft: #fff1d6; --snk-ink: #ffffff;
+  --run: #c9d3df; --focus-line: #fff4d6;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+    --accent: #ff6b81; --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+    --src: #4fb3d9; --src-soft: #12303d; --src-ink: #031620;
+    --snk: #f0b552; --snk-soft: #2f2410; --snk-ink: #1d1400;
+    --run: #3a4456; --focus-line: #2c2a1c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+  --accent: #ff6b81; --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+  --src: #4fb3d9; --src-soft: #12303d; --src-ink: #031620;
+  --snk: #f0b552; --snk-soft: #2f2410; --snk-ink: #1d1400;
+  --run: #3a4456; --focus-line: #2c2a1c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font-sans); }
+.wrap { max-width: 1200px; margin: 0 auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+header .kick { font: 600 .75rem var(--font-sans); text-transform: uppercase; letter-spacing: .1em; color: var(--src); }
+header h1 { margin: 2px 0 0; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 80ch; }
+code, .mono { font-family: var(--font-mono); }
+.main { display: grid; grid-template-columns: minmax(0, 470px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel h2 { margin: 0 0 10px; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+.code { font: 500 .92rem/1.8 var(--font-mono); overflow-x: auto; white-space: pre; }
+.code .ln { padding: 0 8px; border-radius: 4px; }
+.code .kw { font-weight: 600; }
+.ref { border-radius: 4px; padding: 1px 2px; transition: background .25s, color .25s; }
+.ref sub { font: 600 .62rem var(--font-sans); color: var(--muted); margin-left: 1px; }
+.ref.src { background: var(--src); color: var(--src-ink); }
+.ref.snk { background: var(--snk); color: var(--snk-ink); }
+.ref.src sub, .ref.snk sub { color: inherit; opacity: .85; }
+.ref.pair { box-shadow: inset 0 -2px 0 var(--accent); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: .82rem; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend .ls::before { background: var(--src); } .legend .lk::before { background: var(--snk); }
+
+.groups { display: flex; flex-direction: column; gap: 10px; }
+.group .gh { font: 600 .72rem var(--font-sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 .78rem var(--font-mono); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip[aria-current="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip.right { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.chip.right::after { content: " ✓"; color: var(--ok); }
+.chip.shown::after { content: " ●"; color: var(--muted); }
+.chip[aria-current="true"].right::after, .chip[aria-current="true"].shown::after { color: inherit; }
+.score { margin-top: 10px; font-size: .85rem; color: var(--muted); }
+
+.q .count { font: 500 .75rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.q h3 { margin: 2px 0 6px; font-size: 1.25rem; line-height: 1.3; text-wrap: balance; }
+.q h3 code { background: var(--empty); padding: 0 5px; border-radius: 4px; font-size: .92em; }
+.q p { margin: 0 0 12px; color: var(--muted); }
+.ans { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font: 600 1.4rem var(--font-mono); }
+.ans label { display: inline-flex; flex-direction: column; align-items: center; font: 500 .7rem var(--font-sans); color: var(--muted); gap: 2px; }
+.ans input { width: 64px; font: 600 1.2rem var(--font-mono); text-align: center; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.btn { font: 500 .9rem var(--font-sans); padding: 8px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 96px; }
+.fb { margin-top: 12px; border-radius: 8px; padding: 8px 12px; font-size: .95rem; }
+.fb.good { background: var(--ok-soft); border: 1px solid var(--ok); }
+.fb.bad { background: var(--bad-soft); border: 1px solid var(--bad); }
+.fb.info { background: var(--empty); border: 1px solid var(--line); }
+.fb b { font-family: var(--font-mono); }
+
+.space { display: flex; flex-direction: column; gap: 12px; }
+svg { width: 100%; height: auto; max-width: 560px; display: block; margin: 0 auto; overflow: visible; }
+.cell { fill: var(--panel); stroke: var(--line); stroke-width: 1; transition: fill .2s; }
+.cell.ran { fill: var(--run); }
+.cell.src { fill: var(--src); }
+.cell.snk { fill: var(--snk); }
+.cell.both { fill: url(#both); }
+.axis { font: 500 13px var(--font-mono); fill: var(--muted); }
+.axlbl { font: 600 13px var(--font-sans); fill: var(--muted); }
+.tag { font: 600 11px var(--font-mono); pointer-events: none; }
+.tag.on-src { fill: var(--src-ink); } .tag.on-snk { fill: var(--snk-ink); }
+.arrow { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.arrowhead { fill: var(--accent); }
+.narr { border-top: 1px solid var(--line); padding-top: 12px; min-height: 7.5em; }
+.narr .step { font: 500 .75rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.narr p { margin: 4px 0 0; font-size: 1.02rem; max-width: 72ch; }
+.narr code { background: var(--empty); padding: 0 4px; border-radius: 4px; font-size: .95em; }
+.vec { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+
+table.sum { border-collapse: collapse; width: 100%; font-size: .9rem; }
+table.sum th, table.sum td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.sum th { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+table.sum td.v { font-family: var(--font-mono); font-weight: 600; }
+.sumwrap { overflow-x: auto; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { header h1 { font-size: 1.4rem; } .code { font-size: .8rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kick">CS 6030 · Lecture 1 · Dependence Analysis</div>
+    <h1>Dependence Distance Practice</h1>
+    <p>Find the distance vector of every true, anti and input dependence in the loop below. The loops run with
+      <code>J</code> outermost, so each vector is written <span class="vec">⟨d<sub>J</sub>, d<sub>I</sub>⟩</span>: the iteration of the
+      sink minus the iteration of the source. There are no output dependences, because every iteration stores to a
+      different element.</p>
+  </header>
+
+  <div class="main">
+    <div class="left">
+      <section class="panel" aria-labelledby="codeh">
+        <h2 id="codeh">The loop</h2>
+        <div class="code" id="code"></div>
+        <div class="legend"><span class="ls">source</span><span class="lk">sink</span></div>
+      </section>
+
+      <section class="panel q" aria-labelledby="qtitle">
+        <span class="count" id="qcount"></span>
+        <h3 id="qtitle"></h3>
+        <p id="qhint"></p>
+        <form id="form" autocomplete="off">
+          <div class="ans">
+            ⟨
+            <label><span>d<sub>J</sub></span><input id="dj" inputmode="numeric" aria-label="Distance in J"></label>
+            ,
+            <label><span>d<sub>I</sub></span><input id="di" inputmode="numeric" aria-label="Distance in I"></label>
+            ⟩
+          </div>
+          <div class="controls">
+            <button class="btn primary" type="submit" id="checkBtn">Check</button>
+            <button class="btn" type="button" id="showBtn">Show answer</button>
+            <button class="btn" type="button" id="prevBtn">◀ Previous</button>
+            <button class="btn" type="button" id="nextBtn">Next ▶</button>
+          </div>
+        </form>
+        <div id="fb" class="fb hidden" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="progh">
+        <h2 id="progh">All dependences</h2>
+        <div class="groups" id="groups"></div>
+        <div class="score" id="score"></div>
+      </section>
+    </div>
+
+    <section class="panel space" aria-labelledby="spaceh">
+      <h2 id="spaceh">Iteration space (N = 6)</h2>
+      <svg id="svg" viewBox="0 0 360 330" role="img" aria-labelledby="svgdesc">
+        <desc id="svgdesc">Grid of iterations, J down the side and I across the top. The animation marks the source and sink iterations of the selected dependence.</desc>
+      </svg>
+      <div class="narr" aria-live="polite"><span class="step" id="nstep"></span><p id="nmsg"></p></div>
+      <div class="controls">
+        <button class="btn" type="button" id="replayBtn" disabled>↻ Replay animation</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel hidden" id="summary" aria-labelledby="sumh">
+    <h2 id="sumh">Summary</h2>
+    <div class="sumwrap"><table class="sum" id="sumtab"></table></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+// References: subscripts are A(I + a, J + b).  order = evaluation order in one iteration (loads before the store).
+const REFS = {
+  R1: { text: "A(I-1,J)", a: -1, b: 0, store: false, order: 1 },
+  R2: { text: "A(I+1,J)", a: 1, b: 0, store: false, order: 2 },
+  R3: { text: "A(I,J-1)", a: 0, b: -1, store: false, order: 3 },
+  R4: { text: "A(I,J+1)", a: 0, b: 1, store: false, order: 4 },
+  R5: { text: "A(I,J)", a: 0, b: 0, store: false, order: 5 },
+  W:  { text: "A(I,J)", a: 0, b: 0, store: true, order: 6 },
+};
+const LO = 2, HI = 6;                     // DO J = 2, N and DO I = 2, N with N = 6
+const BASE = { j: 3, i: 3 };              // source iteration used in the animation
+
+const lexPos = d => d[0] > 0 || (d[0] === 0 && d[1] > 0);
+const isZero = d => d[0] === 0 && d[1] === 0;
+// Distance from x to y: y touches what x touched when (j',i') = (j - b_y + b_x, i - a_y + a_x).
+const dist = (x, y) => [REFS[x].b - REFS[y].b, REFS[x].a - REFS[y].a];
+function orient(x, y) {
+  const d = dist(x, y);
+  if (lexPos(d) || (isZero(d) && REFS[x].order < REFS[y].order)) return { src: x, snk: y, d };
+  return { src: y, snk: x, d: dist(y, x) };
+}
+
+// Build the questions: every pair, then keep the ones of each kind.
+const Q = [];
+const reads = ["R1", "R2", "R3", "R4", "R5"];
+for (const r of reads) {
+  const o = orient("W", r);
+  Q.push({ kind: o.src === "W" ? "true" : "anti", pair: ["W", r], ...o });
+}
+for (let x = 0; x < reads.length; x++)
+  for (let y = x + 1; y < reads.length; y++)
+    Q.push({ kind: "input", pair: [reads[x], reads[y]], ...orient(reads[x], reads[y]) });
+const KINDS = { true: "True", anti: "Anti", input: "Input" };
+Q.sort((p, q) => Object.keys(KINDS).indexOf(p.kind) - Object.keys(KINDS).indexOf(q.kind));
+console.assert(Q.filter(q => q.kind === "true").length === 2 && Q.filter(q => q.kind === "anti").length === 3 &&
+               Q.filter(q => q.kind === "input").length === 10, "dependence counts");
+Q.forEach(q => { q.state = "open"; q.tries = 0; });
+
+const $ = id => document.getElementById(id);
+const vec = d => `⟨${d[0]}, ${d[1]}⟩`;
+const name = r => (REFS[r].store ? "the store " : "the load ") + `<code>${REFS[r].text}</code><sub>${r}</sub>`;
+const plain = r => `${REFS[r].text}${r === "W" ? " (store)" : r === "R5" ? " (load)" : ""}`;
+const elem = (r, it) => `A(${it.i + REFS[r].a},${it.j + REFS[r].b})`;
+
+// ---- code panel ----
+function refSpan(r) { return `<span class="ref" data-r="${r}">${REFS[r].text}<sub>${r}</sub></span>`; }
+$("code").innerHTML = [
+  `<span class="kw">DO</span> J = 2, N`,
+  `   <span class="kw">DO</span> I = 2, N`,
+  `      ${refSpan("W")} = 0.175*(${refSpan("R1")}`,
+  `                   + ${refSpan("R2")}`,
+  `                   + ${refSpan("R3")}`,
+  `                   + ${refSpan("R4")})`,
+  `             + 0.3*${refSpan("R5")}`,
+  `   <span class="kw">ENDDO</span>`,
+  `<span class="kw">ENDDO</span>`,
+].map(l => `<div class="ln">${l}</div>`).join("");
+
+// ---- progress chips ----
+function buildChips() {
+  const g = $("groups"); g.innerHTML = "";
+  for (const k of Object.keys(KINDS)) {
+    const box = document.createElement("div"); box.className = "group";
+    box.innerHTML = `<div class="gh">${KINDS[k]} dependences</div><div class="chips"></div>`;
+    Q.forEach((q, n) => {
+      if (q.kind !== k) return;
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.dataset.n = n;
+      b.textContent = `${q.pair[0]}–${q.pair[1]}`;
+      b.setAttribute("aria-label", `${KINDS[k]} dependence between ${plain(q.pair[0])} and ${plain(q.pair[1])}`);
+      b.addEventListener("click", () => go(n));
+      box.querySelector(".chips").appendChild(b);
+    });
+    g.appendChild(box);
+  }
+}
+function refreshChips() {
+  document.querySelectorAll(".chip").forEach(c => {
+    const q = Q[+c.dataset.n];
+    c.classList.toggle("right", q.state === "right");
+    c.classList.toggle("shown", q.state === "shown");
+    c.setAttribute("aria-current", +c.dataset.n === cur ? "true" : "false");
+  });
+  const right = Q.filter(q => q.state === "right").length, done = Q.filter(q => q.state !== "open").length;
+  $("score").textContent = `${right} of ${Q.length} correct${done > right ? `, ${done - right} shown` : ""}.`;
+  if (done === Q.length) showSummary();
+}
+
+// ---- iteration space ----
+const CELL = 52, X0 = 62, Y0 = 46, NS = "http://www.w3.org/2000/svg";
+const cx = i => X0 + (i - LO) * CELL + CELL / 2, cy = j => Y0 + (j - LO) * CELL + CELL / 2;
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(e); return e;
+}
+const svg = $("svg"); const cells = {};
+function buildGrid() {
+  const defs = el("defs", {});
+  const pat = el("linearGradient", { id: "both", x1: 0, y1: 0, x2: 1, y2: 1 }, defs);
+  el("stop", { offset: "50%", "stop-color": "var(--src)" }, pat);
+  el("stop", { offset: "50%", "stop-color": "var(--snk)" }, pat);
+  const mk = el("marker", { id: "head", viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 5, markerHeight: 5, orient: "auto-start-reverse" }, defs);
+  el("path", { d: "M0,0 L10,5 L0,10 z", class: "arrowhead" }, mk);
+  el("text", { x: X0 + (HI - LO + 1) * CELL / 2, y: 14, "text-anchor": "middle", class: "axlbl" }).textContent = "I →";
+  el("text", { x: 14, y: Y0 + (HI - LO + 1) * CELL / 2, "text-anchor": "middle", class: "axlbl" }).textContent = "J ↓";
+  for (let i = LO; i <= HI; i++)
+    el("text", { x: cx(i), y: Y0 - 10, "text-anchor": "middle", class: "axis" }).textContent = i;
+  for (let j = LO; j <= HI; j++) {
+    el("text", { x: X0 - 12, y: cy(j) + 4, "text-anchor": "end", class: "axis" }).textContent = j;
+    for (let i = LO; i <= HI; i++)
+      cells[`${j},${i}`] = el("rect", { x: X0 + (i - LO) * CELL + 2, y: Y0 + (j - LO) * CELL + 2,
+                                        width: CELL - 4, height: CELL - 4, rx: 6, class: "cell" });
+  }
+}
+let overlay = null, timers = [];
+function clearAnim() {
+  timers.forEach(clearTimeout); timers = [];
+  Object.values(cells).forEach(c => c.setAttribute("class", "cell"));
+  if (overlay) overlay.remove();
+  overlay = el("g", {});
+  document.querySelectorAll(".ref").forEach(s => s.classList.remove("src", "snk"));
+}
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function later(ms, f) { timers.push(setTimeout(f, reduced ? 0 : ms)); }
+function narrate(step, html) { $("nstep").textContent = step; $("nmsg").innerHTML = html; }
+
+function animate(q) {
+  clearAnim();
+  const s = BASE, t = { j: BASE.j + q.d[0], i: BASE.i + q.d[1] };
+  const same = isZero(q.d);
+  document.querySelector(`.ref[data-r="${q.src}"]`).classList.add("src");
+  document.querySelector(`.ref[data-r="${q.snk}"]`).classList.add("snk");
+  narrate("1 · source", `In iteration <span class="vec">(J=${s.j}, I=${s.i})</span>, the source ${name(q.src)} ` +
+          `${REFS[q.src].store ? "stores to" : "loads"} <code>${elem(q.src, s)}</code>.`);
+  cells[`${s.j},${s.i}`].setAttribute("class", "cell src");
+  tag(s, q.src, "on-src", same ? -9 : 0);
+
+  // Walk the iterations in execution order (J outer, I inner) from the source to the sink.
+  const order = [];
+  for (let j = s.j, i = s.i; j < t.j || (j === t.j && i < t.i); ) {
+    if (++i > HI) { i = LO; j++; }
+    order.push({ j, i });
+  }
+  let ms = 1300;
+  order.slice(0, -1).forEach(it => later(ms += 160, () => cells[`${it.j},${it.i}`].setAttribute("class", "cell ran")));
+  if (order.length > 1) later(ms, () => narrate("2 · time passes", "Later iterations run in order: across each row of I, then down to the next J."));
+  later(ms += 700, () => {
+    if (same) cells[`${t.j},${t.i}`].setAttribute("class", "cell both");
+    else { cells[`${t.j},${t.i}`].setAttribute("class", "cell snk"); tag(t, q.snk, "on-snk", 0); }
+    if (same) tag(t, q.snk, "on-snk", 9);
+    narrate("3 · sink", `In iteration <span class="vec">(J=${t.j}, I=${t.i})</span>, the sink ${name(q.snk)} ` +
+            `${REFS[q.snk].store ? "stores to" : "loads"} the same element, <code>${elem(q.snk, t)}</code>` +
+            (same ? `. It is the same iteration: the load happens before the store.` : "."));
+    drawArrow(s, t);
+  });
+  later(ms += 1400, () => narrate("4 · distance", `Distance = sink − source = <span class="vec">(${t.j}−${s.j}, ${t.i}−${s.i})</span> = ` +
+        `<span class="vec">${vec(q.d)}</span>. ` + carried(q.d)));
+  $("replayBtn").disabled = false;
+}
+function carried(d) {
+  if (isZero(d)) return "All zeros: the dependence is loop independent.";
+  return d[0] !== 0 ? "The first nonzero entry is for J, so the J loop (level 1) carries it."
+                    : "The first nonzero entry is for I, so the I loop (level 2) carries it.";
+}
+function tag(it, r, cls, dy) {
+  el("text", { x: cx(it.i), y: cy(it.j) + 4 + dy, "text-anchor": "middle", class: `tag ${cls}` }, overlay).textContent = r;
+}
+function drawArrow(s, t) {
+  let d;
+  if (s.j === t.j && s.i === t.i) {
+    const x = cx(s.i) + CELL / 2 - 4, y = cy(s.j);
+    d = `M ${x} ${y - 10} C ${x + 30} ${y - 34}, ${x + 30} ${y + 34}, ${x} ${y + 10}`;
+  } else {
+    // Arc to one side of the straight line (above it for a step along I), clear of the tags.
+    const x1 = cx(s.i), y1 = cy(s.j), x2 = cx(t.i), y2 = cy(t.j);
+    const len = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+    const nx = uy, ny = -ux;
+    const a = { x: x1 + nx * 15 + ux * 6, y: y1 + ny * 15 + uy * 6 }, b = { x: x2 + nx * 15 - ux * 6, y: y2 + ny * 15 - uy * 6 };
+    const bend = Math.max(22, len / 3), mx = (a.x + b.x) / 2 + nx * bend, my = (a.y + b.y) / 2 + ny * bend;
+    d = `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+  }
+  const p = el("path", { d, class: "arrow", "marker-end": "url(#head)" }, overlay);
+  if (reduced) return;
+  const L = p.getTotalLength();
+  p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+  p.getBoundingClientRect();
+  p.style.transition = "stroke-dashoffset .8s ease"; p.style.strokeDashoffset = 0;
+}
+
+// ---- questions ----
+let cur = 0;
+function go(n) {
+  cur = (n + Q.length) % Q.length;
+  const q = Q[cur];
+  clearAnim();
+  narrate("", "Answer the question to see the dependence in the iteration space.");
+  $("replayBtn").disabled = true;
+  document.querySelectorAll(".ref").forEach(s => s.classList.toggle("pair", q.pair.includes(s.dataset.r)));
+  $("qcount").textContent = `${KINDS[q.kind]} dependence · ${cur + 1} of ${Q.length}`;
+  $("qtitle").innerHTML = `Between ${name(q.pair[0])} and ${name(q.pair[1])}`;
+  $("qhint").textContent = {
+    true: "A true dependence goes from the store to a later load of the same element.",
+    anti: "An anti dependence goes from a load to a later store of the same element.",
+    input: "An input dependence goes from one load to a later load of the same element. Decide which load touches the element first.",
+  }[q.kind];
+  $("dj").value = ""; $("di").value = "";
+  $("fb").className = "fb hidden";
+  if (q.state !== "open") { $("dj").value = q.d[0]; $("di").value = q.d[1]; feedback(q, true); animate(q); }
+  refreshChips();
+  $("dj").focus({ preventScroll: true });
+}
+function feedback(q, revisit) {
+  const fb = $("fb");
+  fb.className = "fb " + (q.state === "right" ? "good" : "info");
+  fb.innerHTML = (q.state === "right" ? "Correct. " : "The answer is shown. ") +
+    `${KINDS[q.kind]} dependence from <b>${q.src}</b> to <b>${q.snk}</b> with distance <b>${vec(q.d)}</b>.`;
+}
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const q = Q[cur], fb = $("fb");
+  const dj = $("dj").value.trim().replace("−", "-"), di = $("di").value.trim().replace("−", "-");
+  if (!/^-?\d+$/.test(dj) || !/^-?\d+$/.test(di)) {
+    fb.className = "fb bad"; fb.textContent = "Enter a whole number in each box."; return;
+  }
+  const a = [+dj, +di];
+  if (a[0] === q.d[0] && a[1] === q.d[1]) {
+    if (q.state === "open") q.state = "right";
+    feedback(q); animate(q); refreshChips(); return;
+  }
+  q.tries++;
+  fb.className = "fb bad";
+  if (a[0] === -q.d[0] && a[1] === -q.d[1] && !isZero(q.d))
+    fb.innerHTML = `<b>${vec(a)}</b> is the vector from ${q.snk} to ${q.src}, which goes backward in time: its first nonzero entry is negative. Which reference touches the element first?`;
+  else if (!lexPos(a) && !isZero(a))
+    fb.innerHTML = `A distance vector cannot have a negative first nonzero entry: the sink would run before the source. Try again.`;
+  else
+    fb.innerHTML = `Not quite. Pick an iteration (J, I), find the element the first reference touches, and find the iteration where the other reference touches it.` +
+      (q.tries >= 2 ? " You can also use Show answer." : "");
+});
+$("showBtn").addEventListener("click", () => {
+  const q = Q[cur];
+  if (q.state === "open") q.state = "shown";
+  $("dj").value = q.d[0]; $("di").value = q.d[1];
+  feedback(q); animate(q); refreshChips();
+});
+$("prevBtn").addEventListener("click", () => go(cur - 1));
+$("nextBtn").addEventListener("click", () => go(cur + 1));
+$("replayBtn").addEventListener("click", () => animate(Q[cur]));
+
+function showSummary() {
+  $("summary").classList.remove("hidden");
+  $("sumtab").innerHTML = `<thead><tr><th>Type</th><th>Source</th><th>Sink</th><th>Distance</th><th>Carried by</th></tr></thead><tbody>` +
+    Q.map(q => `<tr><td>${KINDS[q.kind]}</td><td><code>${plain(q.src)}</code></td><td><code>${plain(q.snk)}</code></td>` +
+      `<td class="v">${vec(q.d)}</td><td>${isZero(q.d) ? "loop independent" : q.d[0] ? "J (level 1)" : "I (level 2)"}</td></tr>`).join("") +
+    `</tbody>`;
+}
+
+buildGrid(); buildChips(); go(0);
+</script>
+</body>
+</html>
