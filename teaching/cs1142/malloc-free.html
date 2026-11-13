@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside malloc and free</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Stack frame (pointer variables) on top, heap strip below, byte-level zoom of one block underneath */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #18202c; --muted: #586274; --line: #d6dce5; --empty: #eaeef3;
+  --accent: #d6455d; --ok: #1f8a5a; --ok-soft: #d9f2e6; --bad: #c9334c; --bad-soft: #fbe1e5;
+  --v0: #f6c453; --v0i: #3b2a00;
+  --v1: #63b8dc; --v1i: #06283a;
+  --v2: #a891ec; --v2i: #1f1150;
+  --v3: #4fbf8f; --v3i: #022a19;
+  --v4: #f29b6b; --v4i: #3a1500;
+  --v5: #e58fc0; --v5i: #3a0a26;
+  --hdr: #5b6475; --hdr-ink: #ffffff;
+  --pad-a: #e2e6ec; --pad-b: #f7f8fa; --pad-ink: #7a8394;
+  --free-bg: #eef0f4;
+  --focus-line: #fff4d6;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+    --accent: #ff6b81; --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+    --v0: #d9a531; --v0i: #1d1400; --v1: #3c9ac2; --v1i: #031620; --v2: #8a72db; --v2i: #0f0730;
+    --v3: #35a578; --v3i: #01180e; --v4: #d9804f; --v4i: #200b00; --v5: #c96fa4; --v5i: #220414;
+    --hdr: #8691a5; --hdr-ink: #0f131a;
+    --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8; --free-bg: #1b212b;
+    --focus-line: #2c2a1c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+  --accent: #ff6b81; --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+  --v0: #d9a531; --v0i: #1d1400; --v1: #3c9ac2; --v1i: #031620; --v2: #8a72db; --v2i: #0f0730;
+  --v3: #35a578; --v3i: #01180e; --v4: #d9804f; --v4i: #200b00; --v5: #c96fa4; --v5i: #220414;
+  --hdr: #8691a5; --hdr-ink: #0f131a;
+  --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8; --free-bg: #1b212b;
+  --focus-line: #2c2a1c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font-sans); }
+.wrap {
+  max-width: 1280px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+header h1 { margin: 0; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 76ch; }
+code, .mono { font-family: var(--font-mono); }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tab { font: 500 .95rem var(--font-sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.main { display: grid; grid-template-columns: minmax(0, 430px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel h2 { margin: 0 0 10px; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.sec + .sec { margin-top: 18px; }
+
+/* code */
+.code { font: 500 .95rem/1.8 var(--font-mono); overflow-x: auto; white-space: pre; }
+.code .ln { padding: 0 8px; border-radius: 4px; transition: background .25s, opacity .25s; min-height: 1.8em; }
+.code .ln.focus { background: var(--focus-line); }
+.code .ln.done { opacity: 1; }
+.code .ln.todo { opacity: .45; }
+.code .cm { color: var(--muted); font-weight: 400; }
+.code .cm.bad { color: var(--accent); }
+.code .kw { font-weight: 600; }
+.code .str { color: var(--ok); }
+.code .appear { animation: fadein .35s ease both; }
+.code:empty::before { content: "Nothing run yet. Use the controls above."; color: var(--muted); font-family: var(--font-sans); font-size: .9rem; }
+
+/* stack */
+.vars { display: flex; flex-wrap: wrap; gap: 8px; }
+.var { border: 1px solid var(--line); border-left: 6px solid var(--vc); border-radius: 8px; padding: 6px 10px; font-family: var(--font-mono); min-width: 150px; }
+.var .vn { font-weight: 600; font-size: 1.05rem; margin-right: 8px; }
+.var .vv { font-weight: 600; font-size: .95rem; font-variant-numeric: tabular-nums; }
+.var .vt { display: block; font-size: .72rem; color: var(--muted); }
+.var.dang { border-color: var(--bad); border-left-color: var(--vc); background: var(--bad-soft); }
+.var.dang .vt { color: var(--bad); font-weight: 600; }
+.var.chg { animation: flash 1s ease both; }
+
+/* heap strip */
+.heapwrap { overflow-x: auto; padding-bottom: 4px; }
+.heap { display: flex; align-items: stretch; min-width: 560px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.blk { flex: var(--sz) 1 0; min-width: 84px; display: flex; flex-direction: column; border-right: 2px solid var(--panel); position: relative; cursor: pointer; background: var(--bc); color: var(--bi); }
+.blk .row { display: flex; flex: 1; }
+.blk .hdr { width: 30px; flex: none; background: var(--hdr); color: var(--hdr-ink); font: 600 .78rem var(--font-mono); display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; transform: rotate(180deg); padding: 6px 0; }
+.blk .body { flex: 1; padding: 6px 8px; min-width: 0; display: flex; flex-direction: column; gap: 3px; min-height: 92px; }
+.blk .lbl { font: 600 .9rem var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk .txt { font: 500 .82rem var(--font-mono); opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk .addr { font: 500 .72rem var(--font-mono); padding: 2px 8px; background: var(--panel); color: var(--muted); }
+.blk.free { --bc: var(--free-bg); --bi: var(--muted); background: repeating-linear-gradient(45deg, var(--pad-a) 0 7px, var(--pad-b) 7px 14px); }
+.blk.leak { box-shadow: inset 0 0 0 3px var(--bad); }
+.blk.sel .addr { color: var(--accent); font-weight: 600; }
+.blk.sel::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 3px var(--accent); pointer-events: none; }
+.blk.enter { animation: grow .5s cubic-bezier(.2, .9, .3, 1.1) both; }
+.blk.changed .body { animation: fadein .6s ease both; }
+.topblk { flex: 60 1 0; min-width: 110px; border: 0; background: transparent; color: var(--muted); font: 500 .8rem var(--font-sans); display: flex; align-items: center; justify-content: center; padding: 8px; text-align: center; border-left: 2px dashed var(--line); }
+.badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.badge { font: 600 .74rem var(--font-mono); padding: 0 8px; border-radius: 999px; line-height: 1.6; background: var(--vc); color: var(--vi); box-shadow: 0 0 0 1.5px var(--panel); }
+.badge.dang { background: var(--panel); color: var(--bad); box-shadow: inset 0 0 0 2px var(--bad); }
+.axis { display: flex; justify-content: space-between; font: 500 .72rem var(--font-mono); color: var(--muted); margin-top: 4px; min-width: 560px; }
+.fl { margin-top: 10px; font: 500 .88rem var(--font-mono); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.fl .k { font: 600 .72rem var(--font-sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.fl .e { border: 1px dashed var(--line); border-radius: 6px; padding: 1px 8px; }
+.fl .e.new { animation: flash 1s ease both; }
+
+/* zoom */
+.zoomhead { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.zoom { display: grid; grid-template-columns: 62px repeat(16, minmax(26px, 1fr)); gap: 3px; min-width: 520px; }
+.zr { font: 500 .7rem var(--font-mono); color: var(--muted); display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
+.zc { border-radius: 4px; text-align: center; font: 600 .85rem/1 var(--font-mono); padding: 6px 0; background: var(--bc); color: var(--bi); }
+.zc.hd { background: var(--hdr); color: var(--hdr-ink); font-size: .74rem; }
+.zc.pd { background: repeating-linear-gradient(45deg, var(--pad-a) 0 5px, var(--pad-b) 5px 10px); color: var(--pad-ink); font-weight: 400; }
+.zc.fr { background: var(--free-bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.zc.unk { opacity: .45; font-weight: 400; }
+.zc.nul { font-size: .7rem; }
+.zc.hit { animation: flash 1s ease both; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 13px; height: 13px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+
+.out { margin-top: 12px; border-radius: 8px; padding: 8px 12px; font: 500 .95rem var(--font-mono); background: var(--ink); color: var(--bg); white-space: pre-wrap; }
+.out .pr { opacity: .55; margin-right: 8px; }
+.out .er { color: #ff9aa9; }
+
+/* narration + controls */
+.narr { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.narr .count { font: 500 .75rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.narr h3 { margin: 0; font-size: 1.3rem; line-height: 1.3; text-wrap: balance; }
+.narr p { margin: 0; font-size: 1.05rem; max-width: 76ch; }
+.narr code { background: var(--empty); padding: 0 4px; border-radius: 4px; font-size: .95em; }
+.math { font-family: var(--font-mono); font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+.btn { font: 500 .9rem var(--font-sans); padding: 7px 13px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn.sm { padding: 3px 9px; font-size: .82rem; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.mono { font-family: var(--font-mono); }
+.speed { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); margin-left: auto; }
+.keys { font-size: .8rem; color: var(--muted); }
+kbd { font: 500 .75rem var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* live controls */
+.stmt { font: 500 .95rem var(--font-mono); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.stmt input { font: 500 .95rem var(--font-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.stmt input.nm { width: 5.5ch; } .stmt input.sz { width: 7ch; } .stmt input.tx { width: 11ch; }
+.lvars { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.lvar { border: 1px solid var(--line); border-left: 6px solid var(--vc); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.lvar .top { font: 600 .95rem var(--font-mono); display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.lvar .top small { color: var(--bad); font-weight: 600; }
+.lvar .acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.opt { display: flex; align-items: center; gap: 8px; font-size: .9rem; margin-top: 12px; }
+.hint { font-size: .82rem; color: var(--muted); margin: 8px 0 0; }
+.hidden { display: none !important; }
+
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes grow { from { opacity: 0; transform: scaleX(.6); transform-origin: left; } to { opacity: 1; transform: none; } }
+@keyframes flash { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { header h1 { font-size: 1.4rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Inside malloc and free</h1>
+    <p>Pointer variables live in <code>main</code>'s stack frame; the blocks they point to live in the heap. Step through the lecture program, or switch to <b>Live heap</b> and run your own <code>malloc</code>, <code>free</code> and <code>strcpy</code>. Simplified glibc model on x86-64: 8-byte header, block sizes a multiple of 16, minimum 32, one free list per size.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="0">Walk-through (slides 7–11)</button>
+    <button class="tab" role="tab" data-tab="1">Live heap</button>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <section class="panel" id="livePanel">
+        <h2>Run a statement</h2>
+        <div class="stmt">
+          <span>char *</span><input class="nm" id="lvName" value="a" maxlength="8" spellcheck="false" aria-label="Variable name">
+          <span>= malloc(</span><input class="sz" id="lvSize" type="number" min="1" max="1024" value="32" aria-label="Bytes to request"><span>);</span>
+          <button class="btn primary sm" id="lvMalloc">Run</button>
+        </div>
+        <div class="lvars" id="lvVars"></div>
+        <label class="opt"><input type="checkbox" id="lvMerge" checked> Merge free neighbours on <code>free</code></label>
+        <div class="controls" style="margin-top:12px">
+          <button class="btn" id="lvReset">Reset heap</button>
+          <button class="btn" id="lvDemo" title="Load the slide 14 setup">Load slide 14 setup</button>
+        </div>
+        <p class="hint">Click any heap block to see its bytes. Requests are capped at 1024 bytes; real requests of 128 KiB or more skip the heap and get their own mapping.</p>
+      </section>
+      <section class="panel">
+        <h2 id="codeTitle">C</h2>
+        <div class="code" id="code"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="sec">
+        <h2>Stack: main's frame</h2>
+        <div class="vars" id="stack"></div>
+      </div>
+      <div class="sec">
+        <h2>Heap, low addresses → high</h2>
+        <div class="heapwrap"><div class="heap" id="heap"></div><div class="axis" id="axis"></div></div>
+        <div class="fl" id="fl"></div>
+      </div>
+      <div class="sec" id="zoomSec">
+        <div class="zoomhead"><h2 id="zoomTitle">Block bytes</h2></div>
+        <div class="heapwrap"><div class="zoom" id="zoom"></div></div>
+        <div class="legend">
+          <span><i style="background:var(--hdr)"></i>8-byte header (block size)</span>
+          <span><i style="background:var(--v0)"></i>your bytes</span>
+          <span><i style="background:repeating-linear-gradient(45deg,var(--pad-a) 0 4px,var(--pad-b) 4px 8px)"></i>padding to a multiple of 16</span>
+          <span><b class="mono">?</b> never written: whatever was there</span>
+        </div>
+      </div>
+      <div id="out"></div>
+
+      <div class="narr" aria-live="polite">
+        <span class="count" id="count"></span>
+        <h3 id="ntitle"></h3>
+        <p id="nmsg"></p>
+      </div>
+
+      <div class="controls" id="stepControls">
+        <button class="btn" id="resetBtn">Restart</button>
+        <button class="btn" id="backBtn">◀ Back</button>
+        <button class="btn primary" id="playBtn">▶ Play</button>
+        <button class="btn" id="stepBtn">Step ▶</button>
+        <label class="speed" for="speed">Speed <input type="range" id="speed" min="0.5" max="3" step="0.25" value="1"></label>
+        <span class="keys" style="width:100%"><kbd>→</kbd> step &nbsp;<kbd>←</kbd> back &nbsp;<kbd>space</kbd> play &nbsp;<kbd>R</kbd> restart</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* ================= allocator model ================= */
+  const HEAP0 = 0x555555559298;           // first block's header; its first user byte is …92a0
+  const hex = (a) => "0x" + a.toString(16);
+  const sh = (a) => "…" + a.toString(16).slice(-4);
+  const need = (n) => Math.max(32, Math.ceil((n + 8) / 16) * 16);
+  const user = (b) => b.chunk + 8;
+
+  function fresh() { return { blocks: [], top: HEAP0, vars: {}, gens: {}, order: [], fl: {}, out: [], dead: false, merge: false, nextGen: 1 }; }
+  const clone = (H) => JSON.parse(JSON.stringify(H));
+  const byAddr = (H) => H.blocks.slice().sort((x, y) => x.chunk - y.chunk);
+  const blockAt = (H, a) => H.blocks.find((b) => a >= user(b) && a < b.chunk + b.size);
+  function flPush(H, b) { (H.fl[b.size] = H.fl[b.size] || []).push(user(b)); }
+  function flRemove(H, b) {
+    const l = H.fl[b.size]; if (!l) return;
+    const i = l.indexOf(user(b)); if (i >= 0) l.splice(i, 1);
+    if (!l.length) delete H.fl[b.size];
+  }
+  function declare(H, name) { if (!H.order.includes(name)) H.order.push(name); if (!(name in H.vars)) H.vars[name] = undefined; }
+  function isDangling(H, name) {
+    const a = H.vars[name];
+    if (a === null || a === undefined) return false;
+    const b = blockAt(H, a);
+    return !b || b.free || user(b) !== a || b.gen !== H.gens[name];
+  }
+  function loseOwner(H, name) {
+    const a = H.vars[name];
+    if (a === null || a === undefined) return null;
+    const b = blockAt(H, a);
+    if (b && !b.free && b.owner === name && b.gen === H.gens[name]) { b.owner = null; b.leak = true; return b; }
+    return null;
+  }
+
+  function malloc(H, name, n) {
+    declare(H, name);
+    const leaked = loseOwner(H, name);
+    const sz = need(n);
+    let b = null, how, split = null;
+    const l = H.fl[sz];
+    if (l && l.length) {
+      const a = l[l.length - 1];
+      b = H.blocks.find((x) => user(x) === a);
+      flRemove(H, b); how = "reuse";
+    } else {
+      const c = byAddr(H).filter((x) => x.free && x.size >= sz);
+      if (c.length) {
+        b = c[0]; flRemove(H, b); how = "fit";
+        if (b.size - sz >= 32) {
+          split = { chunk: b.chunk + sz, size: b.size - sz, req: 0, free: true, bytes: b.bytes.slice(sz), gen: H.nextGen++ };
+          b.bytes = b.bytes.slice(0, sz - 8); b.size = sz;
+          H.blocks.push(split); flPush(H, split);
+        }
+      } else {
+        b = { chunk: H.top, size: sz, bytes: Array(sz - 8).fill(null), free: true };
+        H.top += sz; H.blocks.push(b); how = "top";
+      }
+    }
+    b.free = false; b.req = n; b.gen = H.nextGen++; b.owner = name; b.leak = false;
+    H.vars[name] = user(b); H.gens[name] = b.gen;
+    return { b, how, sz, split, leaked };
+  }
+
+  function coalesce(H) {
+    const bl = byAddr(H); let merged = 0;
+    for (let i = 0; i < bl.length - 1;) {
+      const a = bl[i], c = bl[i + 1];
+      if (a.free && c.free && a.chunk + a.size === c.chunk) {
+        flRemove(H, a); flRemove(H, c);
+        a.bytes = a.bytes.concat(Array(8).fill(null), c.bytes);
+        a.size += c.size; a.gen = H.nextGen++;
+        bl.splice(i + 1, 1); flPush(H, a); merged++;
+      } else i++;
+    }
+    H.blocks = bl;
+    return merged;
+  }
+
+  function free(H, name) {
+    const a = H.vars[name];
+    if (a === null) return { kind: "null" };
+    if (a === undefined) return { kind: "uninit" };
+    const b = H.blocks.find((x) => user(x) === a);
+    if (!b) { H.dead = true; H.out.push({ err: "free(): invalid pointer\nAborted (core dumped)" }); return { kind: "invalid" }; }
+    if (b.free) { H.dead = true; H.out.push({ err: "free(): double free detected in tcache 2\nAborted (core dumped)" }); return { kind: "double" }; }
+    const stale = b.gen !== H.gens[name];
+    const victim = b.owner;
+    b.free = true; b.owner = null; b.leak = false; flPush(H, b);
+    const merged = H.merge ? coalesce(H) : 0;
+    return { kind: stale ? "stale" : "ok", b, victim, merged };
+  }
+
+  function strcpy(H, name, str) {
+    const a = H.vars[name];
+    if (a === null) { H.dead = true; H.out.push({ err: "Segmentation fault (core dumped)" }); return { kind: "null" }; }
+    if (a === undefined) return { kind: "uninit" };
+    const b = blockAt(H, a);
+    if (!b) return { kind: "wild" };
+    const off = a - user(b), room = b.bytes.length - off, len = str.length + 1;
+    if (len > room) return { kind: "overflow", len, room, b };
+    const dang = isDangling(H, name);
+    for (let i = 0; i < str.length; i++) b.bytes[off + i] = str.charCodeAt(i);
+    b.bytes[off + str.length] = 0;
+    return { kind: dang ? "dangling" : "ok", b, owner: b.owner, off, len };
+  }
+
+  function readStr(H, a) {
+    const b = blockAt(H, a); if (!b) return "";
+    let s = "";
+    for (let i = a - user(b); i < b.bytes.length && s.length < 60; i++) {
+      const c = b.bytes[i];
+      if (c === 0) break;
+      s += c === null ? "�" : String.fromCharCode(c);
+    }
+    return s;
+  }
+
+  /* ================= rendering ================= */
+  const colorIdx = {};
+  const vcol = (name) => {
+    if (!(name in colorIdx)) colorIdx[name] = Object.keys(colorIdx).length % 6;
+    const k = colorIdx[name];
+    return `--vc: var(--v${k}); --vi: var(--v${k}i); --bc: var(--v${k}); --bi: var(--v${k}i);`;
+  };
+
+  function renderStack(H, P) {
+    $("stack").innerHTML = H.order.map((n) => {
+      const a = H.vars[n];
+      const d = isDangling(H, n);
+      const v = a === undefined ? "?" : a === null ? "NULL" : hex(a);
+      const chg = P && (P.vars[n] !== a || isDangling(P, n) !== d);
+      const note = a === undefined ? "char * · not set yet" : a === null ? "char *" : d ? "char * · dangling" : "char *";
+      return `<div class="var${d ? " dang" : ""}${chg ? " chg" : ""}" style="${vcol(n)}"><span class="vn">${esc(n)}</span><span class="vv">${v}</span><span class="vt">${note}</span></div>`;
+    }).join("");
+  }
+
+  function pointersTo(H, b) {
+    return H.order.filter((n) => H.vars[n] === user(b)).map((n) => {
+      const live = !b.free && b.gen === H.gens[n];
+      return `<span class="badge${live ? "" : " dang"}" style="${vcol(n)}">${live ? "" : "⚠ "}${esc(n)}</span>`;
+    }).join("");
+  }
+
+  function renderHeap(H, P, sel) {
+    const pmap = {};
+    if (P) P.blocks.forEach((b) => (pmap[b.chunk] = b));
+    const html = byAddr(H).map((b) => {
+      const p = pmap[b.chunk];
+      const isNew = P && !p;
+      const changed = P && p && (p.free !== b.free || p.size !== b.size || p.owner !== b.owner || JSON.stringify(p.bytes) !== JSON.stringify(b.bytes));
+      let lbl, style;
+      if (b.free) { lbl = "free"; style = ""; }
+      else if (b.owner) { lbl = `${esc(b.owner)} · ${b.req} B`; style = vcol(b.owner); }
+      else { lbl = `leaked · ${b.req} B`; style = "--bc: var(--bad-soft); --bi: var(--bad);"; }
+      const s = readStr(H, user(b));
+      const txt = b.bytes[0] !== null && b.bytes[0] !== undefined ? `"${esc(s)}"` : "";
+      const cls = ["blk"];
+      if (b.free) cls.push("free");
+      if (b.leak) cls.push("leak");
+      if (sel === b.chunk) cls.push("sel");
+      if (isNew) cls.push("enter"); else if (changed) cls.push("changed");
+      return `<div class="${cls.join(" ")}" data-chunk="${b.chunk}" style="--sz:${b.size}; ${style}" title="Show bytes">
+        <div class="row"><div class="hdr">${b.size}</div><div class="body"><div class="badges">${pointersTo(H, b)}</div><div class="lbl">${lbl}</div><div class="txt">${txt}</div></div></div>
+        <div class="addr">${sh(user(b))}</div></div>`;
+    });
+    html.push(`<div class="topblk">top: not yet used<br>↑ heap grows this way</div>`);
+    $("heap").innerHTML = html.join("");
+    $("axis").innerHTML = `<span>${hex(HEAP0)} (first header)</span><span>top = ${hex(H.top)}</span>`;
+    const sizes = Object.keys(H.fl).map(Number).sort((a, b) => a - b);
+    const pfl = P ? P.fl : H.fl;
+    $("fl").innerHTML = `<span class="k">Free lists</span>` + (sizes.length
+      ? sizes.map((s) => `<span class="e${(pfl[s] || []).join() !== H.fl[s].join() ? " new" : ""}">${s}-byte: → ${H.fl[s].slice().reverse().map(sh).join(" → ")}</span>`).join("")
+      : `<span class="e">empty</span>`);
+  }
+
+  function renderZoom(H, P, chunk) {
+    const b = H.blocks.find((x) => x.chunk === chunk);
+    if (!b) { $("zoomSec").classList.add("hidden"); return; }
+    $("zoomSec").classList.remove("hidden");
+    const p = P && P.blocks.find((x) => x.chunk === chunk);
+    const owner = b.free ? "free block" : b.owner ? `${b.owner}'s block` : "leaked block";
+    $("zoomTitle").textContent = `Bytes of the ${owner} at ${sh(user(b))}: ${b.size} bytes = 8 header + ${b.free ? b.size - 8 + " free" : b.req + " requested + " + (b.size - 8 - b.req) + " padding"}`;
+    const st = b.free ? "" : b.owner ? vcol(b.owner) : "--bc: var(--bad-soft); --bi: var(--bad);";
+    const h = [];
+    for (let r = 0; r < b.size / 16; r++) {
+      h.push(`<div class="zr">${sh(b.chunk + 16 * r)}</div>`);
+      for (let c = 0; c < 16; c++) {
+        const i = r * 16 + c;
+        if (i < 8) { if (i === 0) h.push(`<div class="zc hd" style="grid-column: span 8">header: size ${b.size}</div>`); continue; }
+        const k = i - 8, v = b.bytes[k];
+        const ch = v === null || v === undefined ? "?" : v === 0 ? "\\0" : v < 32 || v > 126 ? "·" : esc(String.fromCharCode(v));
+        const cls = ["zc"];
+        if (b.free) cls.push("fr"); else if (k >= b.req) cls.push("pd");
+        if (v === null || v === undefined) cls.push("unk");
+        if (v === 0) cls.push("nul");
+        if (p && p.size === b.size && p.bytes[k] !== v) cls.push("hit");
+        h.push(`<div class="${cls.join(" ")}" style="${b.free || k >= b.req ? "" : st}">${ch}</div>`);
+      }
+    }
+    $("zoom").innerHTML = h.join("");
+  }
+
+  function renderOut(H) {
+    $("out").innerHTML = H.out.length ? `<div class="out">${H.out.map((o) => (o.err ? `<span class="er">${esc(o.err)}</span>` : `<span class="pr">$</span>${esc(o.text)}`)).join("\n")}</div>` : "";
+  }
+
+  function renderAll(H, P, sel) {
+    renderStack(H, P);
+    renderHeap(H, P, sel);
+    renderZoom(H, P, sel);
+    renderOut(H);
+  }
+
+  /* ================= walk-through ================= */
+  const K = (s) => `<span class="kw">${s}</span>`;
+  const S = (s) => `<span class="str">${esc(s)}</span>`;
+  const CODE = [
+    `${K("char")} *p = malloc(16);`,
+    `${K("char")} *q = malloc(32);`,
+    `${K("char")} *r = malloc(16);`,
+    `strcpy(q, ${S('"hello"')});`,
+    `free(q);`,
+    `${K("char")} *s = malloc(32);`,
+    `strcpy(s, ${S('"secret"')});`,
+    `strcpy(q, ${S('"oops"')});   <span class="cm bad">// q dangles</span>`,
+    `printf(${S('"%s\\n"')}, s);   <span class="cm">// prints oops</span>`,
+    `<span class="cm">// slide 11: give it all back</span>`,
+    `free(p);`,
+    `free(s);`,
+    `free(r);`,
+    `<span class="cm">// the allocator merges neighbours</span>`,
+    `${K("char")} *t = malloc(80);`,
+    `${K("char")} *u = malloc(200);`,
+  ];
+  const blockOf = (H, n) => blockAt(H, H.vars[n]).chunk;
+
+  const STEPS = [
+    { lines: [], ops: (H) => ["p", "q", "r", "s"].forEach((n) => declare(H, n)),
+      title: "Four pointers, an empty heap",
+      msg: "<code>p</code>, <code>q</code>, <code>r</code> and <code>s</code> are local variables, so they live in <code>main</code>'s stack frame. They hold garbage until we assign them. Nothing has been allocated yet." },
+    { lines: [0], ops: (H) => malloc(H, "p", 16), zoom: "p",
+      title: "malloc(16) takes 32 bytes",
+      msg: "An 8-byte header that records the block's size, your 16 bytes, then padding: <span class=\"math\">8 + 16 = 24 → 32</span>, the next multiple of 16. The pointer you get back, <code>0x…92a0</code>, points just <em>past</em> the header. The header is how <code>free(p)</code> knows how much to give back, a size you never told it." },
+    { lines: [1], ops: (H) => malloc(H, "q", 32), zoom: "q",
+      title: "Each request takes the next piece",
+      msg: "<span class=\"math\">8 + 32 = 40 → 48</span>. <code>q</code> is 32 bytes above <code>p</code>, because <code>p</code>'s block was 32 bytes. Blocks sit end to end, each with its own header." },
+    { lines: [2], ops: (H) => malloc(H, "r", 16), zoom: "r",
+      title: "r is 48 bytes above q",
+      msg: "Another 32-byte block. Three pointers in the stack, three blocks in the heap. The variables and the memory they point to are in different places." },
+    { lines: [3], ops: (H) => strcpy(H, "q", "hello"), zoom: "q",
+      title: "strcpy writes through q",
+      msg: "6 bytes go into <code>q</code>'s block: <code>h e l l o \\0</code>. The other 26 requested bytes are still <b>?</b>, because <code>malloc</code> does not clear memory." },
+    { lines: [4], ops: (H) => free(H, "q"), zoom: "q",
+      title: "free gives the block back, and changes nothing else",
+      msg: "The block goes onto the allocator's 48-byte free list, ready for reuse. In this model <code>\"hello\"</code> is not erased. <code>free</code> also cannot change <code>q</code>: <code>q</code> is your variable, passed by value. <code>q</code> still holds an address that is no longer yours. It is a <b>dangling pointer</b>, and it looks no different from a good one." },
+    { lines: [5], ops: (H) => malloc(H, "s", 32), zoom: "s",
+      title: "The next request of that size gets the same block",
+      msg: "<code>malloc(32)</code> needs a 48-byte block, and the 48-byte free list has one. So <span class=\"math\">s == q</span>. Notice the old <code>\"hello\"</code> is still there: <code>malloc</code> hands you whatever was in the block." },
+    { lines: [6], ops: (H) => strcpy(H, "s", "secret"), zoom: "s",
+      title: "s stores its data",
+      msg: "<code>s</code> owns this block now, and writes <code>\"secret\"</code> into it. As far as <code>s</code> knows, nobody else can see these bytes." },
+    { lines: [7], ops: (H) => strcpy(H, "q", "oops"), zoom: "s",
+      title: "Writing through the stale q",
+      msg: "<code>q</code> holds the same address, so <code>strcpy</code> writes <code>o o p s \\0</code> over the start of <code>s</code>'s data. The flashing bytes are the ones that changed. No error, no warning. In a real program these two writes are in different functions, written months apart." },
+    { lines: [8], ops: (H) => H.out.push({ text: readStr(H, H.vars.s) }), zoom: "s",
+      title: "printf(\"%s\", s) prints oops",
+      msg: "<code>printf</code> reads from <code>s</code> up to the first <code>\\0</code>, which is now at index 4. The <code>t</code> left over from <code>\"secret\"</code> is after the terminator, so it is never printed. Memory gets reused, and two parts of the program share it without knowing." },
+    { lines: [10, 11, 12], ops: (H) => { free(H, "p"); free(H, "s"); free(H, "r"); }, zoom: null,
+      title: "Free all three: three free blocks side by side",
+      msg: "Now <code>p</code>, <code>s</code> and <code>r</code> are freed (and <code>q</code> still dangles). There are 32 + 48 + 32 bytes free, but as three separate pieces. The largest request any one of them could satisfy is 40 bytes." },
+    { lines: [13], ops: (H) => coalesce(H), zoom: "merged",
+      title: "Free neighbours merge",
+      msg: "Adjacent free blocks are joined into one free block of <span class=\"math\">32 + 48 + 32 = 112</span> bytes, with one header. Without merging, the heap would fill with small fragments that no request fits. All four pointers now dangle into it." },
+    { lines: [14], ops: (H) => malloc(H, "t", 80), zoom: "t",
+      title: "A request none of the three could hold",
+      msg: "<span class=\"math\">8 + 80 = 88 → 96</span> bytes. None of the original blocks (32, 48, 32) was big enough, but the merged 112-byte block is. The 16 bytes left over are too small to be a block (minimum 32), so <code>t</code> gets all 112. <code>t == p</code>: <code>p</code> now points at <code>t</code>'s data." },
+    { lines: [15], ops: (H) => malloc(H, "u", 200), zoom: null,
+      title: "No free block fits: the heap grows",
+      msg: "<span class=\"math\">8 + 200 = 208</span> bytes, and nothing on the free lists is that big. So <code>malloc</code> carves the block from the <em>top</em> of the heap, moving it up into the gap below the stack. When it runs out, it asks the kernel for more. A request of 128 KiB or more skips the heap entirely, gets its own mapping in the gap, and <code>free</code> hands it straight back to the kernel." },
+  ];
+
+  const STATES = [];
+  (function build() {
+    let H = fresh();
+    STEPS.forEach((s, i) => {
+      H = clone(H);
+      s.ops(H);
+      if (s.zoom === "merged") s.zoomChunk = HEAP0;
+      else s.zoomChunk = s.zoom ? blockOf(H, s.zoom) : null;
+      STATES[i] = H;
+    });
+  })();
+
+  let mode = 0, step = 0, prev = -1, timer = null;
+  const fwd = () => step === prev + 1;
+
+  function renderWalk() {
+    const st = STEPS[step], H = STATES[step];
+    const P = fwd() && prev >= 0 ? STATES[prev] : null;
+    const doneMax = Math.max(-1, ...STEPS.slice(0, step + 1).flatMap((s) => s.lines));
+    $("codeTitle").textContent = "C (slides 7–11)";
+    $("code").innerHTML = CODE.map((c, i) => `<div class="ln${st.lines.includes(i) ? " focus" : i > doneMax ? " todo" : ""}">${c}</div>`).join("");
+    renderAll(H, P, st.zoomChunk);
+    $("count").textContent = `Step ${step + 1} of ${STEPS.length}`;
+    $("ntitle").innerHTML = st.title;
+    $("nmsg").innerHTML = st.msg;
+    $("backBtn").disabled = step === 0;
+    $("stepBtn").disabled = step === STEPS.length - 1;
+    prev = step;
+  }
+
+  function go(n) { step = Math.max(0, Math.min(STEPS.length - 1, n)); renderWalk(); }
+  function next() { if (step < STEPS.length - 1) go(step + 1); else stop(); }
+  function back() { stop(); if (step > 0) { prev = -5; step--; renderWalk(); } }
+  function restart() { stop(); step = 0; prev = -1; renderWalk(); }
+  function play() {
+    if (step >= STEPS.length - 1) { step = 0; prev = -1; renderWalk(); }
+    $("playBtn").textContent = "❚❚ Pause";
+    timer = setInterval(() => { next(); if (step >= STEPS.length - 1) stop(); }, 4200 / parseFloat($("speed").value));
+  }
+  function stop() { if (timer) clearInterval(timer); timer = null; $("playBtn").textContent = "▶ Play"; }
+
+  /* ================= live heap ================= */
+  let L = fresh(), LP = null, lsel = null;
+  const log = [];
+  let ltitle = "An empty heap", lmsg = "Allocate something with <b>Run</b>. Every statement you run is added to the C listing, and the stack and heap redraw to match.";
+  const quote = (s) => '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+
+  function act(stmt, fn) {
+    if (L.dead) return;
+    LP = clone(L);
+    const res = fn();
+    if (res === false) { LP = null; renderLive(); return; }
+    log.push({ html: stmt, cm: res && res.cm, bad: res && res.bad });
+    renderLive(true);
+  }
+
+  function liveMalloc() {
+    const name = $("lvName").value.trim();
+    const n = Math.round(+$("lvSize").value);
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,7}$/.test(name)) { ltitle = "Pick a C variable name"; lmsg = "Letters, digits and _, not starting with a digit, up to 8 characters."; renderLive(); return; }
+    if (!(n >= 1 && n <= 1024)) { ltitle = "Pick a size from 1 to 1024"; lmsg = "Requests of 128 KiB or more would skip the heap and get their own mapping."; renderLive(); return; }
+    const existed = L.order.includes(name);
+    act(`${existed ? "" : K("char") + " *"}${esc(name)} = malloc(${n});`, () => {
+      const r = malloc(L, name, n);
+      lsel = r.b.chunk;
+      ltitle = `${name} = ${hex(user(r.b))}`;
+      const math = `<span class="math">8 + ${n} = ${n + 8} → ${r.sz}</span>`;
+      lmsg = r.how === "reuse"
+        ? `${math}. The ${r.sz}-byte free list had a block, so <code>malloc</code> reused it. Whatever was in it is still there.`
+        : r.how === "fit"
+          ? `${math}. No ${r.sz}-byte block on a free list, so <code>malloc</code> took the first free block big enough.${r.split ? ` It split off the unused ${r.split.size} bytes as a new free block.` : ` The leftover would be under 32 bytes, so ${name} gets the whole ${r.b.size}-byte block.`}`
+          : `${math}. Nothing on the free lists fits, so the block comes from the top of the heap, which moves up by ${r.sz}.`;
+      if (r.leaked) lmsg += ` <b>Leak:</b> ${name} was the only pointer to the block at ${sh(user(r.leaked))}. Nobody can free it now.`;
+      const others = L.order.filter((x) => x !== name && L.vars[x] === user(r.b));
+      if (others.length) lmsg += ` <b>${others.join(", ")}</b> still point${others.length === 1 ? "s" : ""} here too: dangling.`;
+      return { cm: `${hex(user(r.b))}${r.how === "reuse" ? ", reused" : ""}` };
+    });
+    const used = new Set(L.order); let c = "a";
+    while (used.has(c) && c < "z") c = String.fromCharCode(c.charCodeAt(0) + 1);
+    $("lvName").value = c;
+  }
+
+  function liveFree(name) {
+    act(`free(${esc(name)});`, () => {
+      const r = free(L, name);
+      if (r.kind === "null") { ltitle = "free(NULL) does nothing"; lmsg = "The C standard defines <code>free(NULL)</code> as a no-op. That is why <code>free(p); p = NULL;</code> makes a second free harmless."; return { cm: "no-op" }; }
+      if (r.kind === "uninit") { ltitle = `${name} was never set`; lmsg = "Freeing an uninitialised pointer is undefined behaviour. Not run."; return false; }
+      if (r.kind === "double") { ltitle = "Double free: the program is killed"; lmsg = `That block is already on a free list. glibc checks for this simple case and aborts. Without the check it would go on the list twice, and the next two <code>malloc</code>s of that size would both get it. Press <b>Reset heap</b> to start again.`; return { cm: "abort", bad: true }; }
+      if (r.kind === "invalid") { ltitle = "Not the start of a block"; lmsg = "free() needs exactly what malloc returned. glibc aborts. Press <b>Reset heap</b>."; return { cm: "abort", bad: true }; }
+      lsel = blockAt(L, user(r.b)) ? blockAt(L, user(r.b)).chunk : null;
+      if (r.kind === "stale") {
+        ltitle = `free(${name}) just freed ${r.victim}'s block`;
+        lmsg = `${name} was dangling: its block had been reused by <b>${r.victim}</b>. glibc saw a block in use and had no reason to object. Now <b>${r.victim}</b> dangles too, and the next <code>malloc</code> of this size will hand the same bytes to someone else.`;
+        return { cm: `frees ${r.victim}'s block!`, bad: true };
+      }
+      ltitle = `Block ${sh(user(r.b))} is free`;
+      lmsg = `It goes onto the free list for its size. <code>${name}</code> still holds <code>${hex(L.vars[name])}</code>, so it is now dangling. Write <code>${name} = NULL</code> to be safe.` + (r.merged ? ` It also merged with ${r.merged === 1 ? "a free neighbour" : r.merged + " free neighbours"}.` : "");
+      return { cm: r.merged ? "merged with neighbour" : null };
+    });
+  }
+
+  function liveNull(name) {
+    act(`${esc(name)} = NULL;`, () => {
+      const b = loseOwner(L, name);
+      L.vars[name] = null;
+      ltitle = `${name} = NULL`;
+      lmsg = b ? `<b>Leak.</b> ${name} was the only pointer to the block at ${sh(user(b))}, and it is still in use. Nothing can ever free it. It stays allocated until the program exits.` : `Good habit after <code>free</code>: using ${name} now crashes at once instead of quietly corrupting someone else's data.`;
+      return { cm: b ? "leak!" : null, bad: !!b };
+    });
+  }
+
+  function liveWrite(name, text) {
+    act(`strcpy(${esc(name)}, ${S(quote(text))});`, () => {
+      const r = strcpy(L, name, text);
+      if (r.kind === "uninit") { ltitle = `${name} was never set`; lmsg = "Writing through an uninitialised pointer is undefined behaviour. Not run."; return false; }
+      if (r.kind === "null") { ltitle = "Writing through NULL"; lmsg = "Address 0 is unmapped, so the program crashes at once. Press <b>Reset heap</b>."; return { cm: "segfault", bad: true }; }
+      if (r.kind === "overflow") { ltitle = "That would overflow the block"; lmsg = `${quote(text)} needs ${r.len} bytes including the <code>\\0</code>, and only ${r.room} fit. A real <code>strcpy</code> would keep going into the next block's header. Not run.`; return false; }
+      lsel = r.b.chunk;
+      if (r.kind === "dangling") {
+        ltitle = `Wrote through dangling ${name}`;
+        lmsg = r.owner ? `That block now belongs to <b>${r.owner}</b>. Its data just changed, and nothing reported it.` : `That block is free. The write succeeds anyway, and whoever gets the block next will find this data in it.`;
+        return { cm: r.owner ? `overwrites ${r.owner}!` : "into a free block", bad: true };
+      }
+      ltitle = `${r.len} bytes written`; lmsg = `${text.length} characters plus the <code>\\0</code>.`;
+      return null;
+    });
+  }
+
+  function livePrint(name) {
+    act(`printf(${S('"%s\\n"')}, ${esc(name)});`, () => {
+      const a = L.vars[name];
+      if (a === null) { L.dead = true; L.out.push({ err: "Segmentation fault (core dumped)" }); ltitle = "Reading through NULL"; lmsg = "Crash. Press <b>Reset heap</b>."; return { bad: true }; }
+      if (a === undefined) { ltitle = `${name} was never set`; lmsg = "Not run."; return false; }
+      const s = readStr(L, a);
+      L.out.push({ text: s });
+      ltitle = `printf reads from ${name} up to the first \\0`;
+      lmsg = (s.includes("�") ? "� marks bytes that were never written: garbage. " : "") + (isDangling(L, name) ? `${name} is dangling, so this is whatever the block holds now.` : "");
+      return null;
+    });
+  }
+
+  function liveReset() { L = fresh(); L.merge = $("lvMerge").checked; LP = null; lsel = null; log.length = 0; ltitle = "An empty heap"; lmsg = "Allocate something with <b>Run</b>."; $("lvName").value = "a"; renderLive(); }
+
+  function liveDemo() {
+    liveReset();
+    const q = (n) => { L.merge = $("lvMerge").checked; };
+    q();
+    malloc(L, "p", 32); log.push({ html: `${K("char")} *p = malloc(32);` });
+    free(L, "p"); log.push({ html: "free(p);" });
+    malloc(L, "q", 32); log.push({ html: `${K("char")} *q = malloc(32);`, cm: "gets p's block" });
+    strcpy(L, "q", "q's data"); log.push({ html: `strcpy(q, ${S('"q\'s data"')});` });
+    lsel = L.blocks[0].chunk;
+    ltitle = "Slide 14: p dangles into q's block";
+    lmsg = "Now press <b>free(p)</b>. glibc cannot tell it is a double free, because the block is in use by <code>q</code>. Then <code>malloc</code> 32 bytes as <code>r</code>, <code>strcpy</code> into it, and <code>printf</code> <code>q</code>.";
+    $("lvName").value = "r";
+    renderLive();
+  }
+
+  function renderLive(fresh) {
+    $("codeTitle").textContent = "C, as you ran it";
+    $("code").innerHTML = log.map((l, i) => `<div class="ln${i === log.length - 1 && fresh ? " focus appear" : ""}">${l.html}${l.cm ? `   <span class="cm${l.bad ? " bad" : ""}">// ${esc(l.cm)}</span>` : ""}</div>`).join("");
+    renderAll(L, LP, lsel);
+    LP = null;
+    $("count").textContent = L.dead ? "Program terminated" : `Live heap · ${L.blocks.filter((b) => !b.free).length} in use · ${L.blocks.filter((b) => b.free).length} free`;
+    $("ntitle").innerHTML = esc(ltitle);
+    $("nmsg").innerHTML = lmsg;
+    $("lvVars").innerHTML = L.order.map((n) => {
+      const a = L.vars[n], d = isDangling(L, n);
+      const v = a === undefined ? "?" : a === null ? "NULL" : hex(a);
+      const dis = L.dead ? " disabled" : "";
+      return `<div class="lvar" style="${vcol(n)}">
+        <div class="top">${esc(n)} = ${v}${d ? " <small>dangling</small>" : ""}</div>
+        <div class="acts">
+          <button class="btn sm mono" data-free="${esc(n)}"${dis}>free(${esc(n)})</button>
+          <button class="btn sm mono" data-null="${esc(n)}"${dis}>${esc(n)} = NULL</button>
+          <button class="btn sm mono" data-print="${esc(n)}"${dis}>printf</button>
+        </div>
+        <div class="acts stmt"><span style="font-size:.85rem">strcpy(${esc(n)}, "</span><input class="tx" data-txt="${esc(n)}" value="hello" maxlength="40" aria-label="Text to copy into ${esc(n)}"${dis}><span style="font-size:.85rem">")</span><button class="btn sm" data-write="${esc(n)}"${dis}>Run</button></div>
+      </div>`;
+    }).join("");
+    $("lvMalloc").disabled = L.dead;
+  }
+
+  /* ================= wiring ================= */
+  function setMode(m) {
+    stop(); mode = m;
+    document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(+b.dataset.tab === m)));
+    $("livePanel").classList.toggle("hidden", m !== 1);
+    $("stepControls").classList.toggle("hidden", m !== 0);
+    if (m === 0) { prev = -5; renderWalk(); } else renderLive();
+  }
+  document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(+b.dataset.tab)));
+  $("stepBtn").addEventListener("click", () => { stop(); next(); });
+  $("backBtn").addEventListener("click", back);
+  $("resetBtn").addEventListener("click", restart);
+  $("playBtn").addEventListener("click", () => (timer ? stop() : play()));
+  $("speed").addEventListener("input", () => { if (timer) { stop(); play(); } });
+
+  $("lvMalloc").addEventListener("click", liveMalloc);
+  ["lvName", "lvSize"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") liveMalloc(); }));
+  $("lvReset").addEventListener("click", liveReset);
+  $("lvDemo").addEventListener("click", liveDemo);
+  $("lvMerge").addEventListener("change", () => { L.merge = $("lvMerge").checked; });
+  $("lvVars").addEventListener("click", (e) => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.dataset.free) liveFree(t.dataset.free);
+    else if (t.dataset.null) liveNull(t.dataset.null);
+    else if (t.dataset.print) livePrint(t.dataset.print);
+    else if (t.dataset.write) {
+      const inp = document.querySelector(`input[data-txt="${t.dataset.write}"]`);
+      liveWrite(t.dataset.write, inp ? inp.value : "");
+    }
+  });
+  $("lvVars").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.dataset && e.target.dataset.txt) liveWrite(e.target.dataset.txt, e.target.value);
+  });
+  $("heap").addEventListener("click", (e) => {
+    const b = e.target.closest(".blk"); if (!b) return;
+    const c = +b.dataset.chunk;
+    if (mode === 1) { lsel = c; renderLive(); }
+    else { renderAll(STATES[step], null, c); }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (mode !== 0) return;
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); stop(); next(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); back(); }
+    else if (e.key === " " && tag !== "button") { e.preventDefault(); timer ? stop() : play(); }
+    else if (e.key === "r" || e.key === "R") restart();
+  });
+
+  L.merge = true;
+  setMode(0);
+})();
+</script>
+</body>
+</html>
