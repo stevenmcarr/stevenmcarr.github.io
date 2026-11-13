@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Structures, Part 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Same visual language as the Struct Padding Explorer (part 1): code on the left, memory + narration on the right */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #18202c; --muted: #586274; --line: #d6dce5; --empty: #eaeef3;
+  --accent: #d6455d;
+  --char-bg: #f6c453; --char-ink: #3b2a00;
+  --int-bg:  #63b8dc; --int-ink:  #06283a;
+  --double-bg: #a891ec; --double-ink: #1f1150;
+  --ptr-bg: #4fbf8f; --ptr-ink: #022a19; --ptr-soft: #e3f6ed;
+  --ok: #1f8a5a; --ok-soft: #d9f2e6; --bad: #c9334c; --bad-soft: #fbe1e5;
+  --pad-a: #e2e6ec; --pad-b: #f7f8fa; --pad-ink: #7a8394;
+  --focus-line: #fff4d6;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+    --accent: #ff6b81;
+    --char-bg: #d9a531; --char-ink: #1d1400;
+    --int-bg: #3c9ac2; --int-ink: #031620;
+    --double-bg: #8a72db; --double-ink: #0f0730;
+    --ptr-bg: #35a578; --ptr-ink: #01180e; --ptr-soft: #15301f;
+    --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+    --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8;
+    --focus-line: #2c2a1c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --panel: #171c25; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2b3342; --empty: #1e2430;
+  --accent: #ff6b81;
+  --char-bg: #d9a531; --char-ink: #1d1400;
+  --int-bg: #3c9ac2; --int-ink: #031620;
+  --double-bg: #8a72db; --double-ink: #0f0730;
+  --ptr-bg: #35a578; --ptr-ink: #01180e; --ptr-soft: #15301f;
+  --ok: #4cc98f; --ok-soft: #143222; --bad: #ff6b81; --bad-soft: #3a1820;
+  --pad-a: #262d3a; --pad-b: #1b212b; --pad-ink: #8c96a8;
+  --focus-line: #2c2a1c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font-sans); }
+.wrap {
+  max-width: 1240px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+header h1 { margin: 0; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 72ch; }
+header a { color: inherit; }
+code, .mono { font-family: var(--font-mono); }
+
+/* tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tabs .lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 4px; }
+.tab {
+  font: 500 .95rem var(--font-sans); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer;
+}
+.tab b { font-family: var(--font-mono); margin-right: 6px; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.main { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel h2 { margin: 0 0 10px; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+/* code */
+.code { font: 500 .92rem/1.75 var(--font-mono); overflow-x: auto; white-space: pre; }
+.code .ln { padding: 0 8px; border-radius: 4px; transition: background .25s; min-height: 1.75em; }
+.code .ln.focus { background: var(--focus-line); }
+.code .ln.errl { background: var(--bad-soft); }
+.code .cm { color: var(--muted); font-weight: 400; }
+.code .cm.pad, .code .cm.bad { color: var(--accent); }
+.code .cm.good { color: var(--ok); }
+.code .ty { font-weight: 600; border-radius: 3px; padding: 0 3px; }
+.code .ty.char { color: var(--char-ink); background: var(--char-bg); }
+.code .ty.int { color: var(--int-ink); background: var(--int-bg); }
+.code .ty.double { color: var(--double-ink); background: var(--double-bg); }
+.code .kw { font-weight: 600; }
+.code .str { color: var(--ok); }
+.code .appear { animation: fadein .4s ease both; }
+.qbox { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 0; color: var(--muted); font-size: .95rem; }
+.qbox b { color: var(--ink); }
+
+/* memory grid (exercise 1) */
+.mem-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.scroll { overflow-x: auto; padding-top: 14px; }
+.mem { display: grid; grid-template-columns: 48px repeat(8, minmax(44px, 1fr)); row-gap: 14px; min-width: 420px; }
+.colhead { font: 500 .72rem var(--font-mono); color: var(--muted); text-align: center; padding-bottom: 2px; }
+.rowlbl { font: 500 .8rem var(--font-mono); color: var(--muted); display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; }
+.cell { position: relative; height: 56px; padding: 3px; }
+.cell.cl { padding-left: 0; } .cell.cr { padding-right: 0; }
+.chip {
+  height: 100%; border-radius: 7px; position: relative; display: flex; flex-direction: column;
+  justify-content: space-between; padding: 4px 6px; font-family: var(--font-mono); overflow: hidden;
+}
+.cell.cl .chip { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cell.cr .chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.chip .off { font-size: .68rem; opacity: .7; line-height: 1; }
+.chip .nm { font-size: .88rem; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+.chip .tt { font-size: .62rem; opacity: .8; line-height: 1; white-space: nowrap; }
+.empty .chip { background: var(--empty); color: var(--muted); }
+.empty.legal .chip { box-shadow: inset 0 0 0 2px var(--double-bg); }
+.empty.legal .chip::after { content: "✓"; position: absolute; right: 6px; bottom: 4px; font: 600 .8rem var(--font-sans); color: var(--double-bg); }
+.empty.illegal .chip { opacity: .55; }
+.f-char .chip { background: var(--char-bg); color: var(--char-ink); }
+.f-int .chip { background: var(--int-bg); color: var(--int-ink); }
+.f-double .chip { background: var(--double-bg); color: var(--double-ink); }
+.pad .chip, .tail .chip {
+  background: repeating-linear-gradient(45deg, var(--pad-a) 0 6px, var(--pad-b) 6px 12px);
+  color: var(--pad-ink); box-shadow: inset 0 0 0 1px var(--line);
+}
+.tail .chip { background: repeating-linear-gradient(-45deg, var(--pad-a) 0 6px, var(--pad-b) 6px 12px); }
+.pad .nm, .tail .nm { font-size: .76rem; font-weight: 500; }
+.pad.hot .chip, .tail.hot .chip { box-shadow: inset 0 0 0 2px var(--accent); }
+.cursor::before {
+  content: ""; position: absolute; left: 50%; top: -12px; transform: translateX(-50%);
+  border: 7px solid transparent; border-top: 9px solid var(--accent); border-bottom: 0;
+}
+.cursor .chip { box-shadow: inset 0 0 0 2px var(--accent); }
+.tag { position: absolute; top: -16px; left: calc(50% + 10px); font: 600 .66rem var(--font-sans); color: var(--accent); white-space: nowrap; z-index: 2; }
+.enter .chip { animation: drop .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+.pad.enter .chip, .tail.enter .chip { animation: wipe .4s ease both; }
+.fadeall { animation: fadein .45s ease both; }
+@keyframes drop { from { transform: translateY(-18px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes flash { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* array strip (exercise 1) */
+.strip { display: flex; gap: 6px; align-items: stretch; min-width: 520px; }
+.elem { flex: 1 1 0; border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+.elem .eh { font: 600 .82rem var(--font-mono); }
+.elem .eo { font: 500 .72rem var(--font-mono); color: var(--muted); }
+.bar { display: flex; height: 26px; border-radius: 5px; overflow: hidden; }
+.bar i { display: block; }
+.bar .b-char { background: var(--char-bg); } .bar .b-int { background: var(--int-bg); } .bar .b-double { background: var(--double-bg); }
+.bar .b-pad { background: repeating-linear-gradient(45deg, var(--pad-a) 0 4px, var(--pad-b) 4px 8px); box-shadow: inset 0 0 0 2px var(--accent); }
+.dots { display: flex; align-items: center; color: var(--muted); font: 600 1.2rem var(--font-mono); padding: 0 4px; }
+.endmark { font: 500 .78rem var(--font-mono); color: var(--muted); margin-top: 8px; text-align: right; }
+
+/* frames + cards (exercise 2) */
+.frames { display: flex; flex-direction: column; gap: 14px; }
+.frame { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; }
+.frame .fh { font: 600 .72rem var(--font-sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; }
+.vars { display: flex; flex-wrap: wrap; gap: 8px; }
+.var { display: grid; grid-template-columns: auto auto; column-gap: 8px; align-items: baseline; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-family: var(--font-mono); }
+.var .vn { font-weight: 600; font-size: 1rem; }
+.var .vv { font-weight: 600; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.var .vt { grid-column: 1 / -1; font-size: .7rem; color: var(--muted); }
+.var .vp { grid-column: 1 / -1; font-size: .74rem; color: var(--ptr-ink); background: var(--ptr-bg); border-radius: 4px; padding: 0 5px; justify-self: start; margin-top: 2px; }
+.var.ptr .vn { color: var(--ok); }
+.var.chg { animation: flash .9s ease both; }
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 560px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; position: relative; transition: background .3s, box-shadow .3s; min-width: 0; }
+.card .ci { font: 600 .82rem var(--font-mono); }
+.card .ca { font: 500 .72rem var(--font-mono); color: var(--muted); }
+.card .cn { font-weight: 600; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .cg { font: 600 1.4rem var(--font-mono); }
+.card .cg small { font: 500 .7rem var(--font-sans); color: var(--muted); margin-right: 4px; }
+.card.cur { box-shadow: 0 0 0 3px var(--accent); }
+.card.best { background: var(--ptr-soft); border-color: var(--ptr-bg); }
+.badges { display: flex; gap: 4px; min-height: 22px; flex-wrap: wrap; margin-bottom: 4px; }
+.badge { font: 600 .72rem var(--font-mono); padding: 1px 8px; border-radius: 999px; line-height: 1.6; }
+.badge.i { background: var(--accent); color: #fff; }
+.badge.b { background: var(--ptr-bg); color: var(--ptr-ink); }
+.badge.top { background: var(--ink); color: var(--bg); }
+.badge.in { animation: fadein .4s ease both; }
+.nocards { border: 2px dashed var(--line); border-radius: 10px; padding: 18px; color: var(--muted); text-align: center; }
+.cmp { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; font-family: var(--font-mono); font-size: 1rem; }
+.cmp .arrow { color: var(--muted); }
+.res { font-weight: 600; border-radius: 6px; padding: 1px 10px; }
+.res.t { background: var(--ok-soft); color: var(--ok); }
+.res.f { background: var(--bad-soft); color: var(--bad); }
+.err { margin-top: 14px; border: 1px solid var(--bad); background: var(--bad-soft); color: var(--ink); border-radius: 8px; padding: 8px 12px; font: 500 .88rem var(--font-mono); white-space: pre-wrap; }
+.err b { color: var(--bad); }
+.out { margin-top: 14px; border-radius: 8px; padding: 8px 12px; font: 500 .95rem var(--font-mono); background: var(--ink); color: var(--bg); }
+.out span { opacity: .6; margin-right: 8px; }
+
+/* byte rows (exercise 3) */
+.brows { display: grid; grid-template-columns: 74px repeat(12, minmax(32px, 1fr)); gap: 4px; min-width: 520px; align-items: stretch; }
+.bgrp { font: 600 .72rem var(--font-mono); color: var(--muted); text-align: center; border-bottom: 2px solid var(--line); padding-bottom: 2px; }
+.blbl { font: 600 .9rem var(--font-mono); display: flex; flex-direction: column; justify-content: center; align-items: flex-end; padding-right: 8px; }
+.blbl small { font-weight: 500; font-size: .66rem; color: var(--muted); }
+.byte { border-radius: 6px; padding: 3px 2px; text-align: center; font-family: var(--font-mono); position: relative; transition: box-shadow .25s, opacity .25s; }
+.byte .g { font-size: 1rem; font-weight: 600; line-height: 1.2; display: block; }
+.byte .h { font-size: .64rem; opacity: .75; display: block; }
+.byte .o { font-size: .58rem; opacity: .55; display: block; }
+.byte.c { background: var(--char-bg); color: var(--char-ink); }
+.byte.n { background: var(--int-bg); color: var(--int-ink); }
+.byte.junk { background: repeating-linear-gradient(45deg, var(--pad-a) 0 5px, var(--pad-b) 5px 10px); color: var(--pad-ink); box-shadow: inset 0 0 0 1px var(--line); }
+.byte.ok { box-shadow: 0 0 0 3px var(--ok); }
+.byte.cur { box-shadow: 0 0 0 3px var(--accent); }
+.byte.bad { box-shadow: 0 0 0 3px var(--bad); }
+.byte.dim { opacity: .35; }
+.byte.ok::after { content: "="; position: absolute; left: 50%; bottom: -17px; transform: translateX(-50%); font: 700 .8rem var(--font-mono); color: var(--ok); }
+.byte.bad::after { content: "≠"; position: absolute; left: 50%; bottom: -17px; transform: translateX(-50%); font: 700 .8rem var(--font-mono); color: var(--bad); }
+.bspacer { grid-column: 1 / -1; height: 14px; }
+.addrs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.addrs .var .vv { color: var(--accent); }
+
+/* summary cards (exercise 3 end) */
+.sumgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .sumgrid { grid-template-columns: minmax(0, 1fr); } }
+.sum { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.sum h4 { margin: 0 0 4px; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.sum p { margin: 0; font-size: .92rem; }
+.sum code { font-size: .88em; }
+
+/* narration + controls */
+.narr { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.narr .count { font: 500 .75rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.narr h3 { margin: 0; font-size: 1.3rem; line-height: 1.3; text-wrap: balance; }
+.narr p { margin: 0; font-size: 1.05rem; max-width: 72ch; }
+.narr code, .sum code, .qbox code { background: var(--empty); padding: 0 4px; border-radius: 4px; font-size: .95em; }
+.math { font-family: var(--font-mono); font-weight: 600; }
+.stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.stats:empty { display: none; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; min-width: 120px; }
+.stat .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat .v { font: 600 1.4rem var(--font-mono); font-variant-numeric: tabular-nums; }
+.stat.big { border-color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+.btn { font: 500 .9rem var(--font-sans); padding: 8px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 96px; }
+.speed { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); margin-left: auto; }
+.keys { font-size: .8rem; color: var(--muted); }
+kbd { font: 500 .75rem var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { header h1 { font-size: 1.4rem; } .cell { height: 48px; } .chip .tt { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Structures, Part 2: practice walk-through</h1>
+    <p>Three exercises: one to measure, one to write, one to fix. Try each one on paper first, then step through the answer.
+      Part 1: <a href="struct-padding.html">Struct Padding Explorer</a>.</p>
+  </header>
+
+  <div class="tabs" role="tablist" id="tabs"><span class="lbl">Exercise</span></div>
+
+  <div class="main">
+    <div class="left">
+      <section class="panel">
+        <h2 id="codeTitle">Code</h2>
+        <div class="code" id="code"></div>
+      </section>
+      <section class="panel">
+        <h2>The question</h2>
+        <p class="qbox" id="question"></p>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="mem-head">
+        <h2 style="margin:0" id="visTitle">Memory</h2>
+        <span class="keys"><kbd>→</kbd> step &nbsp;<kbd>←</kbd> back &nbsp;<kbd>space</kbd> play &nbsp;<kbd>R</kbd> restart &nbsp;<kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> exercise</span>
+      </div>
+      <div id="vis"></div>
+
+      <div class="narr" aria-live="polite">
+        <span class="count" id="count"></span>
+        <h3 id="ntitle"></h3>
+        <p id="nmsg"></p>
+      </div>
+      <div class="stats" id="stats"></div>
+
+      <div class="controls">
+        <button class="btn" id="resetBtn">Restart</button>
+        <button class="btn" id="backBtn">◀ Back</button>
+        <button class="btn primary" id="playBtn">▶ Play</button>
+        <button class="btn" id="stepBtn">Step ▶</button>
+        <label class="speed" for="speed">Speed <input type="range" id="speed" min="0.5" max="3" step="0.25" value="1"></label>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const T = (t) => `<span class="ty ${t}">${t}</span>`;
+  const K = (s) => `<span class="kw">${s}</span>`;
+  const S = (s) => `<span class="str">${s}</span>`;
+  const strip = (h) => h.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/g, "_");
+
+  let tab = 0, step = 0, prev = -1, timer = null;
+  const saved = [0, 0, 0];
+  const fwd = () => step === prev + 1;
+
+  /* ================= Exercise 1: How big? ================= */
+  const STU = [], ALT = [];
+  const push = (arr, n, kind, type, name, tt) => {
+    for (let j = 0; j < n; j++) arr.push({ kind, type, name, tt, first: j === 0, last: j === n - 1, j });
+  };
+  push(STU, 32, "field", "char", "name", "char[32]");
+  push(STU, 4, "field", "int", "id", "int");
+  push(STU, 4, "pad", "", "pad", "");
+  push(STU, 8, "field", "double", "gpa", "double");
+  push(ALT, 8, "field", "double", "gpa", "double");
+  push(ALT, 4, "field", "int", "id", "int");
+  push(ALT, 32, "field", "char", "name", "char[32]");
+  push(ALT, 4, "tail", "", "pad", "");
+
+  const ex1 = {
+    label: "How big?",
+    question: "<b>How big?</b> What is <code>sizeof(Student)</code> on x86-64? Where is the padding, if any? What is <code>sizeof</code> of an array of 100?",
+    col: 24,
+    code(st) {
+      const L = [];
+      if (st.alt) {
+        L.push({ id: "td", html: `${K("typedef struct")} {` });
+        L.push({ id: "gpa", html: `    ${T("double")} gpa;`, cm: { text: "offset 0, 8 bytes" } });
+        L.push({ id: "id", html: `    ${T("int")}    id;`, cm: { text: "offset 8, 4 bytes" } });
+        L.push({ id: "name", html: `    ${T("char")}   name[32];`, cm: { text: "offset 12, 32 bytes" } });
+        L.push({ id: "tail", html: "", cm: { text: "4 bytes trailing padding", cls: "pad" } });
+        L.push({ id: "end", html: "} Student;", cm: { text: "sizeof = 48, still" } });
+        return L;
+      }
+      L.push({ id: "td", html: `${K("typedef struct")} {` });
+      L.push({ id: "name", html: `    ${T("char")}   name[32];`, cm: st.placed >= 1 ? { text: "offset 0, 32 bytes" } : null });
+      L.push({ id: "id", html: `    ${T("int")}    id;`, cm: st.placed >= 2 ? { text: "offset 32, 4 bytes" } : null });
+      if (st.padShown) L.push({ id: "pad", html: "", cm: { text: "4 bytes padding", cls: "pad" } });
+      L.push({ id: "gpa", html: `    ${T("double")} gpa;`, cm: st.placed >= 3 ? { text: "offset 40, 8 bytes" } : null });
+      L.push({ id: "end", html: "} Student;", cm: st.summary ? { text: "sizeof = 48" } : null });
+      if (st.array) {
+        L.push({ id: "blank", html: "" });
+        L.push({ id: "arr", html: "Student roster[100];", cm: { text: "sizeof = 4800" } });
+      }
+      return L;
+    },
+    visTitle: (st) => (st.array ? "An array of 100 Students, offsets from roster" : "Memory, offsets from the start of a Student"),
+    vis(st, pst) {
+      if (st.array) return arrayStrip();
+      return memGrid(st.alt ? ALT : STU, st, pst);
+    },
+    stats(st) {
+      if (st.n === 0) return [];
+      if (st.array) return [["sizeof(Student)", 48], ["Elements", 100], ["Padding bytes", 400], ["sizeof(roster)", 4800, true]];
+      const cells = st.alt ? ALT : STU;
+      let f = 0, p = 0;
+      for (let i = 0; i < st.n; i++) cells[i].kind === "field" ? f++ : p++;
+      return [["Field bytes", f], ["Padding bytes", p], [st.summary ? "sizeof(Student)" : "Bytes used so far", st.n, true]];
+    },
+    steps: [
+      { n: 0, cursor: -1, placed: 0, title: "Predict before you step",
+        msg: "Write down three answers: <code>sizeof(Student)</code>, where the padding is, and <code>sizeof</code> of <code>Student roster[100]</code>. Then press <kbd>→</kbd>." },
+      { n: 0, cursor: 0, placed: 0, focus: ["name", "id", "gpa"], title: "Size and alignment of each field",
+        msg: "<code>char name[32]</code> is 32 bytes, but an array is aligned like its <em>element</em>, a <code>char</code>: alignment 1. <code>int id</code> is 4 bytes, alignment 4. <code>double gpa</code> is 8 bytes, alignment 8. The strictest is 8, so the whole struct has alignment 8 and its size will be a multiple of 8." },
+      { n: 32, cursor: 32, placed: 1, focus: ["name"], fresh: ["name"], title: "Place char name[32] at offset 0",
+        msg: "Offset 0 is legal for anything. <code>name</code> fills bytes 0–31, four whole rows. It does not matter how long the string inside is: all 32 bytes belong to the field. The next free byte is 32." },
+      { n: 36, cursor: 36, placed: 2, focus: ["id"], fresh: ["id"], title: "Place int id at offset 32",
+        msg: "<span class=\"math\">32 % 4 = 0</span>, so no padding. <code>id</code> fills bytes 32–35. The next free byte is 36." },
+      { n: 36, cursor: 36, placed: 2, mark: 8, focus: ["gpa"], title: "Can double gpa start at offset 36?",
+        msg: "A <code>double</code> needs an offset that is a multiple of 8. <span class=\"math\">36 % 8 = 4</span>, so <b>no</b>. The ✓ cells are where a <code>double</code> may start; the nearest is <b>40</b>." },
+      { n: 40, cursor: 40, placed: 2, padShown: true, focus: ["pad"], fresh: ["pad"], title: "Insert 4 bytes of padding",
+        msg: "The compiler skips bytes 36–39. They belong to the struct and count toward <code>sizeof</code>, but hold nothing: leftover garbage. This is the padding the question asks about. It is <b>in the middle</b>, between <code>id</code> and <code>gpa</code>." },
+      { n: 48, cursor: 48, placed: 3, padShown: true, focus: ["gpa"], fresh: ["gpa"], title: "Place double gpa at offset 40",
+        msg: "<span class=\"math\">40 % 8 = 0</span>. <code>gpa</code> fills bytes 40–47. The fields end at offset 48." },
+      { n: 48, cursor: -1, placed: 3, padShown: true, focus: ["end"], title: "Any trailing padding?",
+        msg: "The struct's alignment is 8, and <span class=\"math\">48 % 8 = 0</span>. The size is already a multiple of 8, so no trailing padding is needed." },
+      { n: 48, cursor: -1, placed: 3, padShown: true, summary: true, hotPad: true, focus: ["end"], fresh: ["end"], title: "sizeof(Student) is 48",
+        msg: "The fields add up to <span class=\"math\">32 + 4 + 8 = 44</span> bytes, but the struct takes <b>48</b>. The 4 padding bytes are at offsets 36–39, just before <code>gpa</code>." },
+      { n: 48, cursor: -1, placed: 3, alt: true, summary: true, hotPad: true, focus: ["tail", "end"], title: "Would putting the largest field first help?",
+        msg: "Reorder to <code>double gpa; int id; char name[32];</code>. Now <code>gpa</code> is at 0–7, <code>id</code> at 8–11, <code>name</code> at 12–43, with no gap inside. But 44 is not a multiple of 8, so 4 bytes of <b>trailing</b> padding round it up to 48 anyway. The padding moves; it does not disappear. 48 is the smallest multiple of 8 that holds 44 bytes." },
+      { n: 48, cursor: -1, placed: 3, padShown: true, summary: true, array: true, focus: ["arr"], fresh: ["arr"], title: "sizeof(Student[100]) is 4800",
+        msg: "Array elements sit side by side with nothing between them: <span class=\"math\">100 × 48 = 4800</span>. <code>roster[i]</code> starts at offset <span class=\"math\">48 × i</span>, always a multiple of 8, so every <code>gpa</code> stays aligned. The padding repeats too: 400 of those bytes are padding. The next exercise steps through an array by exactly this 48." },
+    ],
+  };
+
+  function memGrid(cells, st, pst) {
+    const rows = 6;
+    const html = ['<div class="scroll"><div class="mem' + (pst && pst.alt !== st.alt ? " fadeall" : "") + '"><div></div>'];
+    for (let c = 0; c < 8; c++) html.push(`<div class="colhead">+${c}</div>`);
+    const prevN = pst && pst.alt === st.alt ? pst.n : st.n;
+    let delay = 0;
+    for (let r = 0; r < rows; r++) {
+      html.push(`<div class="rowlbl">${r * 8}</div>`);
+      for (let c = 0; c < 8; c++) {
+        const i = r * 8 + c;
+        let cls = "cell", inner, tag = "";
+        if (i < st.n) {
+          const x = cells[i];
+          if (x.kind === "field") {
+            cls += ` f-${x.type}`;
+            let nm = "";
+            if (x.name === "name" && (x.first || c === 0)) nm = `name[${x.j}]`;
+            else if (x.first) nm = x.name;
+            inner = `<span class="off">${i}</span>${nm ? `<span class="nm">${nm}</span>` : ""}${x.first ? `<span class="tt">${x.tt}</span>` : ""}`;
+          } else {
+            cls += x.kind === "tail" ? " tail" : " pad";
+            if (st.hotPad) cls += " hot";
+            inner = `<span class="off">${i}</span>${x.first ? `<span class="nm">${x.kind === "tail" ? "trailing" : "pad"}</span>` : ""}`;
+          }
+          if (!x.first && c !== 0) cls += " cl";
+          if (!x.last && c !== 7) cls += " cr";
+          if (pst && i >= prevN && i < st.n) {
+            html.push(`<div class="${cls} enter"><div class="chip" style="animation-delay:${(delay++ * 0.03).toFixed(2)}s">${inner}</div></div>`);
+            continue;
+          }
+        } else {
+          cls += " empty";
+          if (st.mark && i >= st.cursor && i < st.cursor + 12) cls += i % st.mark === 0 ? " legal" : " illegal";
+          inner = `<span class="off">${i}</span>`;
+        }
+        if (i === st.cursor) { cls += " cursor"; tag = `<span class="tag">next free</span>`; }
+        html.push(`<div class="${cls}"><div class="chip">${inner}</div>${tag}</div>`);
+      }
+    }
+    html.push("</div></div>");
+    return html.join("");
+  }
+
+  function arrayStrip() {
+    const bar = `<div class="bar"><i class="b-char" style="flex:32"></i><i class="b-int" style="flex:4"></i><i class="b-pad" style="flex:4"></i><i class="b-double" style="flex:8"></i></div>`;
+    const el = (i) => `<div class="elem fadeall"><div><div class="eh">roster[${i}]</div><div class="eo">offset ${48 * i}</div></div>${bar}</div>`;
+    return `<div class="scroll"><div class="strip">${el(0)}${el(1)}${el(2)}<div class="dots">…</div>${el(99)}</div></div>
+      <div class="endmark">roster[99] ends at offset 4752 + 48 = <b>4800</b></div>
+      <p class="keys" style="margin:10px 0 0">Each bar is one Student: <span style="color:var(--char-ink);background:var(--char-bg);padding:0 4px;border-radius:3px">name</span> <span style="color:var(--int-ink);background:var(--int-bg);padding:0 4px;border-radius:3px">id</span> <span style="outline:2px solid var(--accent);padding:0 4px;border-radius:3px">pad</span> <span style="color:var(--double-ink);background:var(--double-bg);padding:0 4px;border-radius:3px">gpa</span>, drawn to scale.</p>`;
+  }
+
+  /* ================= Exercise 2: Write it ================= */
+  const R = [
+    { nm: "Ada", id: 1, gpa: "3.4" },
+    { nm: "Grace", id: 2, gpa: "3.8" },
+    { nm: "Alan", id: 3, gpa: "3.1" },
+    { nm: "Barbara", id: 4, gpa: "3.9" },
+  ];
+  const addr = (k) => "0x" + (0x1000 + 48 * k).toString(16);
+
+  const ex2 = {
+    label: "Write it",
+    question: "<b>Write it.</b> <code>const Student *best(const Student s[], int n);</code> returns the student with the highest gpa. Why return a pointer rather than a <code>Student</code>? Why <code>const</code>? What should it do when <code>n</code> is 0?",
+    col: 30,
+    code(st) {
+      if (st.code === "q") return [
+        { id: "c1", html: "", cm: { text: "the student with the" } },
+        { id: "c2", html: "", cm: { text: "highest gpa" } },
+        { id: "p1", html: `${K("const")} Student *best(` },
+        { id: "p2", html: `  ${K("const")} Student s[], ${T("int")} n);` },
+      ].map((l) => (l.html === "" ? { id: l.id, html: `<span class="cm">// ${l.cm.text}</span>` } : l));
+      const L = [
+        { id: "sig", html: `${K("const")} Student *best(${K("const")} Student s[], ${T("int")} n) {` },
+        { id: "if0", html: `    ${K("if")} (n == 0)` },
+        { id: "ret0", html: `        ${K("return")} NULL;`, cm: { text: "no best student" } },
+        { id: "b0", html: `    ${K("const")} Student *b = &amp;s[0];` },
+        { id: "for", html: `    ${K("for")} (${T("int")} i = 1; i &lt; n; i++)` },
+        { id: "if", html: `        ${K("if")} (s[i].gpa &gt; b-&gt;gpa)` },
+        { id: "set", html: `            b = &amp;s[i];` },
+        { id: "ret", html: `    ${K("return")} b;` },
+        { id: "close", html: "}" },
+        { id: "bl", html: "" },
+        { id: "decl", html: `Student roster[4] = { ${S('"Ada"')}, ... };`, cm: { text: "4 × 48 bytes" } },
+        { id: "call", html: `${K("const")} Student *top = best(roster, 4);` },
+      ];
+      if (st.code === "misuse") L.push({ id: "bad", html: `top-&gt;gpa = 4.0;`, cm: { text: "error", cls: "bad" }, err: true });
+      L.push({ id: "chk", html: `${K("if")} (top != NULL)` });
+      L.push({ id: "pr", html: `    printf(${S('"%s %.1f\\n"')}, top-&gt;name, top-&gt;gpa);` });
+      return L;
+    },
+    visTitle: (st) => (st.frame ? "Stack frames and the roster array" : "The caller's array"),
+    vis(st, pst) {
+      const v = (name, type, val, ptrTo, chg) =>
+        `<div class="var${ptrTo !== undefined ? " ptr" : ""}${chg && pst ? " chg" : ""}"><span class="vn">${name}</span><span class="vv">${val}</span><span class="vt">${type}</span>${ptrTo !== undefined && ptrTo !== null ? `<span class="vp">→ ${ptrTo}</span>` : ""}</div>`;
+      const ch = (k) => (st.chg || []).includes(k);
+      let h = '<div class="frames">';
+      if (st.frame) {
+        const vars = [v("s", "const Student *", st.empty ? "0x1000" : "0x1000", st.empty ? "(nothing there)" : "roster[0]", ch("s")), v("n", "int", st.empty ? 0 : 4, undefined, ch("n"))];
+        if (st.i !== undefined) vars.push(v("i", "int", st.i, undefined, ch("i")));
+        if (st.b !== undefined) vars.push(v("b", "const Student *", addr(st.b), `roster[${st.b}]`, ch("b")));
+        h += `<div class="frame"><div class="fh">best() — its frame${st.frame === "done" ? " (returned, now gone)" : ""}</div><div class="vars"${st.frame === "done" ? ' style="opacity:.4"' : ""}>${vars.join("")}</div></div>`;
+      }
+      const top = st.top !== undefined ? v("top", "const Student *", st.top === null ? "NULL" : addr(st.top), st.top === null ? null : `roster[${st.top}]`, ch("top")) : "";
+      h += `<div class="frame"><div class="fh">caller — Student roster[${st.empty ? 0 : 4}] at 0x1000${st.empty ? "" : ", 48 bytes each"}</div>`;
+      if (top) h += `<div class="vars" style="margin-bottom:10px">${top}</div>`;
+      if (st.empty) {
+        h += `<div class="nocards">No elements. Without the <code>n == 0</code> check, <code>b = &amp;s[0]</code> would point at whatever happens to lie at 0x1000, and <code>b-&gt;gpa</code> would read it as a <code>double</code>.</div>`;
+      } else {
+        h += '<div class="cards">' + R.map((r, k) => {
+          const badges = [];
+          if (st.i === k) badges.push(`<span class="badge i${ch("i") && pst ? " in" : ""}">i</span>`);
+          if (st.b === k) badges.push(`<span class="badge b${ch("b") && pst ? " in" : ""}">b</span>`);
+          if (st.top === k) badges.push(`<span class="badge top${ch("top") && pst ? " in" : ""}">top</span>`);
+          const cls = ["card"];
+          if (st.i === k) cls.push("cur");
+          if (st.b === k || st.top === k) cls.push("best");
+          return `<div class="${cls.join(" ")}"><div class="badges">${badges.join("")}</div><div class="ci">roster[${k}]</div><div class="ca">${addr(k)}</div><div class="cn">${r.nm}</div><div class="cg"><small>gpa</small>${r.gpa}</div></div>`;
+        }).join("") + "</div>";
+      }
+      h += "</div></div>";
+      if (st.cmp) h += `<div class="cmp"><span>${st.cmp[0]}</span><span class="arrow">→</span><span>${st.cmp[1]}</span><span class="arrow">→</span><span class="res ${st.cmp[2] ? "t" : "f"}">${st.cmp[2] ? "true" : "false"}</span></div>`;
+      if (st.err) h += `<div class="err"><b>error:</b> ${st.err}</div>`;
+      if (st.out) h += `<div class="out"><span>$</span>${st.out}</div>`;
+      return h;
+    },
+    stats(st) {
+      if (!st.bytes) return [];
+      return [["Passed for s", "8 B"], ["Copy of roster", "192 B"], ["Returned", st.bytes, true]];
+    },
+    steps: [
+      { code: "q", title: "Predict before you step",
+        msg: "Write the body of <code>best</code>, then answer the three questions: why a pointer, why <code>const</code>, and what to do when <code>n</code> is 0. Here is the array a caller will pass in. Press <kbd>→</kbd> for one solution." },
+      { code: "sol", frame: true, chg: ["s", "n"], focus: ["call", "sig"], title: "The call passes an address, not the array",
+        msg: "In a parameter list, <code>const Student s[]</code> means exactly <code>const Student *s</code>. The call copies 8 bytes, the address <code>0x1000</code>, not the 4 × 48 = 192 bytes of the array. <code>const</code> means <code>best</code> promises to read the students and never change them." },
+      { code: "sol", frame: true, focus: ["if0"], title: "Is the array empty?",
+        msg: "<code>n</code> is 4, so the check fails and we carry on. We come back to the empty case at the end." },
+      { code: "sol", frame: true, b: 0, chg: ["b"], focus: ["b0"], title: "Start with s[0] as the best so far",
+        msg: "<code>b</code> is a pointer, so it holds an address: <code>&amp;s[0]</code> is <code>0x1000</code>. No <code>Student</code> is copied; <code>b</code> points into the caller's array." },
+      { code: "sol", frame: true, b: 0, i: 1, chg: ["i"], cmp: ["s[1].gpa > b->gpa", "3.8 > 3.4", true], focus: ["for", "if"], title: "i = 1: is Grace better than Ada?",
+        msg: "<code>s[i].gpa</code> uses a dot because <code>s[i]</code> is a <code>Student</code>. <code>b-&gt;gpa</code> uses an arrow because <code>b</code> is a pointer. 3.8 &gt; 3.4, so yes." },
+      { code: "sol", frame: true, b: 1, i: 1, chg: ["b"], focus: ["set"], title: "b = &s[1]",
+        msg: "Only the pointer changes. Its new value is <span class=\"math\">0x1000 + 1 × 48 = 0x1030</span>. Pointer arithmetic counts in whole <code>Student</code>s, and each one is <code>sizeof(Student)</code>, the 48 bytes from exercise 1." },
+      { code: "sol", frame: true, b: 1, i: 2, chg: ["i"], cmp: ["s[2].gpa > b->gpa", "3.1 > 3.8", false], focus: ["for", "if"], title: "i = 2: is Alan better than Grace?",
+        msg: "3.1 &gt; 3.8 is false, so <code>b</code> stays on <code>roster[1]</code>." },
+      { code: "sol", frame: true, b: 1, i: 3, chg: ["i"], cmp: ["s[3].gpa > b->gpa", "3.9 > 3.8", true], focus: ["for", "if"], title: "i = 3: is Barbara better than Grace?",
+        msg: "3.9 &gt; 3.8, so yes." },
+      { code: "sol", frame: true, b: 3, i: 3, chg: ["b"], focus: ["set"], title: "b = &s[3]",
+        msg: "<span class=\"math\">0x1000 + 3 × 48 = 0x1090</span>. <code>b</code> now points at Barbara." },
+      { code: "sol", frame: "done", b: 3, top: 3, chg: ["top"], bytes: "8 B", focus: ["ret", "call"], title: "i = 4 ends the loop; return b",
+        msg: "<code>4 &lt; 4</code> is false, so the loop stops. <code>best</code> returns the 8-byte address <code>0x1090</code> and its frame disappears. That is fine: <code>top</code> points into <code>roster</code>, which belongs to the caller and still exists." },
+      { code: "sol", top: 3, bytes: "8 B", out: "Barbara 3.9", focus: ["chk", "pr"], title: "Why return a pointer?",
+        msg: "Returning a <code>Student</code> would copy all 48 bytes into a <em>separate</em> struct. The caller would get a copy of Barbara, not Barbara. A pointer is 8 bytes, it identifies <em>which</em> element won, so <code>top - roster</code> gives the index 3, and it can be <code>NULL</code> to mean “none”. A <code>Student</code> has no value that means “none”." },
+      { code: "misuse", top: 3, err: "assignment of member 'gpa' in read-only object", focus: ["bad"], title: "Why const?",
+        msg: "<code>s</code> is <code>const</code>, so <code>&amp;s[i]</code> is a <code>const Student *</code>. Returning a plain <code>Student *</code> would need a cast that throws away the promise <code>best</code> made. With <code>const</code> in the return type, the compiler stops the caller from changing a grade through <code>top</code>. It also lets <code>best</code> accept an array the caller declared <code>const</code>." },
+      { code: "sol", frame: true, empty: true, top: null, chg: ["top"], focus: ["if0", "ret0", "chk"], title: "When n is 0, return NULL",
+        msg: "With no students, there is no <code>s[0]</code>. Reading <code>s[0].gpa</code> is undefined behaviour. It reads whatever bytes are there, or crashes. So <code>best</code> returns <code>NULL</code>, and the caller must check <code>top != NULL</code> before using <code>top-&gt;name</code>. This is the same rule as <code>fopen</code> or <code>malloc</code> returning <code>NULL</code>." },
+    ],
+  };
+
+  /* ================= Exercise 3: Fix it ================= */
+  const A_BYTES = [
+    ["B", "42", "c"], ["A", "41", "c"], ["1", "31", "c"], ["1", "31", "c"], ["7", "37", "c"], ["\\0", "00", "c"], ["\\0", "00", "c"], ["\\0", "00", "c"],
+    ["", "e8", "n"], ["", "80", "n"], ["", "00", "n"], ["", "00", "n"],
+  ];
+  const C_BYTES = A_BYTES.map((b, i) => (i === 6 ? ["?", "3f", "junk"] : i === 7 ? ["·", "a2", "junk"] : b));
+
+  const ex3 = {
+    label: "Fix it",
+    question: "<b>Fix it.</b> This does not compile. Write the comparison it needs, including the <code>number</code> field.",
+    col: 30,
+    code(st) {
+      const base = [
+        { id: "a", html: `Flight a = {${S('"BA117"')}, 33000};` },
+        { id: "b", html: "Flight b = a;", cm: { text: "a copy of all 12 bytes" } },
+      ];
+      if (st.code === "q") return base.concat([
+        { id: "if", html: `${K("if")} (a == b)`, cm: st.err ? { text: "does not compile", cls: "bad" } : null, err: !!st.err },
+        { id: "puts", html: `    puts(${S('"same"')});` },
+      ]);
+      if (st.code === "trap") return base.concat([
+        { id: "trap", html: `${K("if")} (a.number == b.number)`, cm: { text: "compiles, always false", cls: "bad" } },
+        { id: "puts", html: `    puts(${S('"same"')});` },
+      ]);
+      const fn = [
+        { id: "sig", html: `${T("int")} flight_equal(${K("const")} Flight *x,` },
+        { id: "sig2", html: `                 ${K("const")} Flight *y) {` },
+        { id: "sc", html: `    ${K("return")} strcmp(x-&gt;number, y-&gt;number) == 0` },
+        { id: "alt", html: `        &amp;&amp; x-&gt;altitude == y-&gt;altitude;` },
+        { id: "close", html: "}" },
+        { id: "bl", html: "" },
+      ];
+      if (st.code === "memcmp") return [
+        base[0],
+        { id: "c", html: "Flight c;", cm: { text: "no initialiser: garbage" } },
+        { id: "cpy", html: `strcpy(c.number, ${S('"BA117"')});`, cm: { text: "writes 6 bytes" } },
+        { id: "calt", html: "c.altitude = 33000;" },
+        { id: "bl", html: "" },
+        { id: "mc", html: "memcmp(&amp;a, &amp;c, <span class=\"kw\">sizeof</span>(Flight))", cm: { text: "!= 0: differs", cls: "bad" } },
+        { id: "fe", html: "flight_equal(&amp;a, &amp;c)", cm: { text: "1: same flight", cls: "good" } },
+      ];
+      return fn.concat(base, [
+        { id: "if", html: `${K("if")} (flight_equal(&amp;a, &amp;b))` },
+        { id: "puts", html: `    puts(${S('"same"')});` },
+      ]);
+    },
+    visTitle: (st) => (st.summary ? "Exercise recap" : "The bytes of each Flight (sizeof = 12)"),
+    vis(st, pst) {
+      if (st.summary) return `<div class="sumgrid">
+        <div class="sum"><h4>1 · How big?</h4><p><code>sizeof(Student)</code> is 48: 44 bytes of fields plus 4 bytes of padding before <code>gpa</code>. 100 of them take 4800.</p></div>
+        <div class="sum"><h4>2 · Write it</h4><p>Take <code>const Student *</code> to read without copying. Return <code>const Student *</code>, or <code>NULL</code> when <code>n</code> is 0.</p></div>
+        <div class="sum"><h4>3 · Fix it</h4><p>No <code>==</code> for structs. Write <code>flight_equal(const Flight *, const Flight *)</code>, use <code>strcmp</code> for the array, and never use <code>memcmp</code>.</p></div></div>`;
+      const rows = st.rows || ["a", "b"];
+      const h = ['<div class="scroll"><div class="brows">', "<div></div>",
+        '<div class="bgrp" style="grid-column: span 8">number[8]</div>', '<div class="bgrp" style="grid-column: span 4">altitude (int, little-endian)</div>'];
+      rows.forEach((r, ri) => {
+        if (ri) h.push('<div class="bspacer"></div>');
+        const bytes = r === "c" ? C_BYTES : A_BYTES;
+        const base = { a: 0x7ffe0010, b: 0x7ffe001c, c: 0x7ffe0028 }[r];
+        h.push(`<div class="blbl">${r}<small>0x${base.toString(16)}</small></div>`);
+        bytes.forEach((b, i) => {
+          const cls = ["byte", b[2]];
+          if ((st.ok || []).includes(i)) cls.push("ok");
+          if (st.cur === i) cls.push("cur");
+          if ((st.bad || []).includes(i)) cls.push("bad");
+          if ((st.dim || []).includes(i)) cls.push("dim");
+          h.push(`<div class="${cls.join(" ")}"><span class="g">${b[0] || "&nbsp;"}</span><span class="h">${b[1]}</span><span class="o">${i}</span></div>`);
+        });
+      });
+      h.push("</div></div>");
+      if (st.addr) h.push(`<div class="addrs">
+        <div class="var"><span class="vn">a.number</span><span class="vv">0x7ffe0010</span><span class="vt">decays to &amp;a.number[0]</span></div>
+        <div class="var"><span class="vn">b.number</span><span class="vv">0x7ffe001c</span><span class="vt">decays to &amp;b.number[0]</span></div></div>`);
+      if (st.cmp) h.push(`<div class="cmp"><span>${st.cmp[0]}</span><span class="arrow">→</span><span>${st.cmp[1]}</span><span class="arrow">→</span><span class="res ${st.cmp[2] ? "t" : "f"}">${st.cmp[3] || (st.cmp[2] ? "true" : "false")}</span></div>`);
+      if (st.err) h.push(`<div class="err"><b>error:</b> ${st.err}</div>`);
+      if (st.out) h.push(`<div class="out"><span>$</span>${st.out}</div>`);
+      return h.join("");
+    },
+    stats: () => [],
+    steps: [
+      { code: "q", title: "Predict before you step",
+        msg: "<code>b</code> is a byte-for-byte copy of <code>a</code>, so they are certainly equal. Why won't <code>a == b</code> compile, and what do you write instead? Press <kbd>→</kbd>." },
+      { code: "q", err: "invalid operands to binary == (have 'Flight' and 'Flight')", focus: ["if"], title: "C has no == for structs",
+        msg: "Assignment is easy for the compiler: copy 12 bytes. Comparison is not, because it would have to decide what “equal” means for every field. C refuses to guess. Java has the same gap: <code>==</code> on objects compares references, and <code>equals</code> is a method someone writes." },
+      { code: "trap", addr: true, cmp: ["a.number == b.number", "0x7ffe0010 == 0x7ffe001c", false], focus: ["trap"], title: "Trap: == on the array field",
+        msg: "This compiles, but <code>a.number</code> is an array, and in an expression it becomes a pointer to its first element. You are comparing two <em>addresses</em>. <code>a</code> and <code>b</code> are separate structs, so the addresses always differ, even though the text is identical." },
+      { code: "sol", focus: ["sig", "sig2", "sc", "alt"], title: "The fix: a comparison function",
+        msg: "Compare field by field. <code>number</code> is a string, so use <code>strcmp</code>, which returns 0 when equal. <code>altitude</code> is an <code>int</code>, so <code>==</code> is right. The parameters are <code>const Flight *</code>: 8 bytes each, read only." },
+      { code: "sol", cur: 0, focus: ["sc"], title: "strcmp walks the characters",
+        msg: "<code>strcmp</code> compares <code>number[0]</code> of each: <code>'B'</code> (0x42) and <code>'B'</code>. Equal, so it moves on." },
+      { code: "sol", ok: [0, 1, 2, 3], cur: 4, focus: ["sc"], title: "…and keeps going while they match",
+        msg: "<code>'A'</code>, <code>'1'</code> and <code>'1'</code> all match. Now <code>'7'</code>." },
+      { code: "sol", ok: [0, 1, 2, 3, 4, 5], dim: [6, 7], cmp: ['strcmp(x->number, y->number)', "both hit '\\0' at index 5", true, "0, equal"], focus: ["sc"], title: "Both strings end at '\\0': equal",
+        msg: "At index 5 both bytes are <code>'\\0'</code>, so both strings end there and <code>strcmp</code> returns 0. It never looks at bytes 6 and 7: they are part of the array but not part of the string." },
+      { code: "sol", ok: [0, 1, 2, 3, 4, 5, 8, 9, 10, 11], dim: [6, 7], cmp: ["x->altitude == y->altitude", "33000 == 33000", true], out: "same", focus: ["alt", "if", "puts"], title: "Then compare altitude",
+        msg: "The 4 bytes <code>e8 80 00 00</code> are 33000 (0x80e8, stored lowest byte first on x86-64). Both match, so <code>flight_equal</code> returns 1 and the program prints <code>same</code>." },
+      { code: "memcmp", rows: ["a", "c"], ok: [0, 1, 2, 3, 4, 5], bad: [6, 7], cmp: ["memcmp(&a, &c, 12)", "byte 6: 0x00 vs 0x3f", false, "≠ 0, different"], focus: ["c", "cpy", "mc", "fe"], title: "Why not memcmp?",
+        msg: "<code>memcmp</code> compares every byte. <code>c</code> got its string from <code>strcpy</code>, which writes only up to the <code>'\\0'</code>. Bytes 6 and 7 still hold old stack garbage. The two flights are equal, but <code>memcmp</code> says they differ. Struct padding has the same problem: bytes 36–39 of every <code>Student</code> hold garbage too." },
+      { code: "sol", summary: true, focus: [], title: "Copy, pointer, or const pointer?",
+        msg: "For every struct parameter, ask that question. A copy is fine for something small like a <code>Point</code>. Use a pointer to change the caller's struct, and a <code>const</code> pointer to read one without copying it." },
+    ],
+  };
+
+  const EX = [ex1, ex2, ex3];
+
+  /* ================= rendering ================= */
+  function renderCode(ex, st, pst) {
+    const lines = ex.code(st);
+    const focus = st.focus || [];
+    const fresh = pst ? st.fresh || [] : [];
+    $("code").innerHTML = lines.map((l) => {
+      const cls = ["ln"];
+      if (focus.includes(l.id)) cls.push(l.err ? "errl" : "focus");
+      else if (l.err) cls.push("errl");
+      let cm = "";
+      if (l.cm) {
+        const n = Math.max(2, ex.col - strip(l.html).length);
+        cm = " ".repeat(l.html ? n : 0) + `<span class="cm ${l.cm.cls || ""}${fresh.includes(l.id) ? " appear" : ""}">// ${l.cm.text}</span>`;
+      }
+      return `<div class="${cls.join(" ")}">${l.html}${cm}</div>`;
+    }).join("");
+  }
+
+  function render() {
+    const ex = EX[tab], st = ex.steps[step];
+    const pst = fwd() && prev >= 0 ? ex.steps[prev] : null;
+    renderCode(ex, st, pst);
+    $("question").innerHTML = ex.question;
+    $("visTitle").textContent = ex.visTitle(st);
+    $("vis").innerHTML = ex.vis(st, pst);
+    $("stats").innerHTML = ex.stats(st).map(([k, v, big]) => `<div class="stat${big ? " big" : ""}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+    $("count").textContent = `Exercise ${tab + 1} · step ${step + 1} of ${ex.steps.length}`;
+    $("ntitle").innerHTML = st.title;
+    $("nmsg").innerHTML = st.msg;
+    $("backBtn").disabled = step === 0;
+    $("stepBtn").disabled = step === ex.steps.length - 1;
+    document.querySelectorAll(".tab").forEach((b, i) => b.setAttribute("aria-selected", String(i === tab)));
+    prev = step;
+  }
+
+  function setTab(t) {
+    if (t === tab) return;
+    stop();
+    saved[tab] = step;
+    tab = t; step = saved[t]; prev = -5;
+    render();
+  }
+
+  /* ================= playback ================= */
+  const last = () => EX[tab].steps.length - 1;
+  function go(n) { step = Math.max(0, Math.min(last(), n)); render(); }
+  function next() { if (step < last()) go(step + 1); else stop(); }
+  function back() { stop(); if (step > 0) { prev = -5; step -= 1; render(); } }
+  function restart() { stop(); step = 0; prev = -1; render(); }
+  function interval() { return 3400 / parseFloat($("speed").value); }
+  function play() {
+    if (step >= last()) { step = 0; prev = -1; render(); }
+    $("playBtn").textContent = "❚❚ Pause";
+    timer = setInterval(() => { next(); if (step >= last()) stop(); }, interval());
+  }
+  function stop() { if (timer) clearInterval(timer); timer = null; $("playBtn").textContent = "▶ Play"; }
+
+  const tabs = $("tabs");
+  EX.forEach((ex, i) => {
+    const b = document.createElement("button");
+    b.className = "tab"; b.setAttribute("role", "tab");
+    b.innerHTML = `<b>${i + 1}</b>${ex.label}`;
+    b.addEventListener("click", () => setTab(i));
+    tabs.appendChild(b);
+  });
+  $("stepBtn").addEventListener("click", () => { stop(); next(); });
+  $("backBtn").addEventListener("click", back);
+  $("resetBtn").addEventListener("click", restart);
+  $("playBtn").addEventListener("click", () => (timer ? stop() : play()));
+  $("speed").addEventListener("input", () => { if (timer) { stop(); play(); } });
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.key === "ArrowRight") { e.preventDefault(); stop(); next(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); back(); }
+    else if (e.key === " " && tag !== "button") { e.preventDefault(); timer ? stop() : play(); }
+    else if (e.key === "r" || e.key === "R") restart();
+    else if (e.key === "1" || e.key === "2" || e.key === "3") setTab(+e.key - 1);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
