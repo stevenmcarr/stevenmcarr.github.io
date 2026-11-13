@@ -196,7 +196,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           <button class="btn primary sm" id="lvMalloc">Run</button>
         </div>
         <div class="lvars" id="lvVars"></div>
-        <label class="opt"><input type="checkbox" id="lvMerge" checked> Merge free neighbors on <code>free</code></label>
+        <label class="opt"><input type="checkbox" id="lvMerge"> Merge free neighbors on <code>free</code> (glibc does this for larger blocks)</label>
         <div class="controls" style="margin-top:12px">
           <button class="btn" id="lvReset">Reset heap</button>
           <button class="btn" id="lvDemo" title="Load the slide 14 setup">Load slide 14 setup</button>
@@ -792,7 +792,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     else if (e.key === "r" || e.key === "R") restart();
   });
 
-  L.merge = true;
+  L.merge = false;
   setMode(0);
 })();
 </script>

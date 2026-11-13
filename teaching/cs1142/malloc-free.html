@@ -196,7 +196,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           <button class="btn primary sm" id="lvMalloc">Run</button>
         </div>
         <div class="lvars" id="lvVars"></div>
-        <label class="opt"><input type="checkbox" id="lvMerge" checked> Merge free neighbors on <code>free</code></label>
+        <label class="opt"><input type="checkbox" id="lvMerge"> Merge free neighbors on <code>free</code> (glibc does this for larger blocks)</label>
         <div class="controls" style="margin-top:12px">
           <button class="btn" id="lvReset">Reset heap</button>
           <button class="btn" id="lvDemo" title="Load the slide 14 setup">Load slide 14 setup</button>
@@ -501,7 +501,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     `free(p);`,
     `free(s);`,
     `free(r);`,
-    `<span class="cm">// the allocator merges neighbors</span>`,
+    `<span class="cm">// small free blocks are not merged</span>`,
     `${K("char")} *t = malloc(80);`,
     `${K("char")} *u = malloc(200);`,
   ];
@@ -540,16 +540,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       msg: "<code>printf</code> reads from <code>s</code> up to the first <code>\\0</code>, which is now at index 4. The <code>t</code> left over from <code>\"secret\"</code> is after the terminator, so it is never printed. Memory gets reused, and two parts of the program share it without knowing." },
     { lines: [10, 11, 12], ops: (H) => { free(H, "p"); free(H, "s"); free(H, "r"); }, zoom: null,
       title: "Free all three: three free blocks side by side",
-      msg: "Now <code>p</code>, <code>s</code> and <code>r</code> are freed (and <code>q</code> still dangles). There are 32 + 48 + 32 bytes free, but as three separate pieces. The largest request any one of them could satisfy is 40 bytes." },
-    { lines: [13], ops: (H) => coalesce(H), zoom: "merged",
-      title: "Free neighbors merge",
-      msg: "Adjacent free blocks are joined into one free block of <span class=\"math\">32 + 48 + 32 = 112</span> bytes, with one header. Without merging, the heap would fill with small fragments that no request fits. All four pointers now dangle into it." },
+      msg: "Now <code>p</code>, <code>s</code> and <code>r</code> are freed (and <code>q</code> still dangles). Each goes onto the free list for its size: the 32-byte list is <code>r</code> → <code>p</code>, the 48-byte list is <code>s</code>. There are 32 + 48 + 32 = 112 bytes free, but as three separate pieces. The largest request any one of them could satisfy is 40 bytes." },
+    { lines: [13], ops: () => {}, zoom: null,
+      title: "Small free blocks stay separate",
+      msg: "glibc keeps up to 7 freed blocks of each small size (up to about 1 KiB) on per-size lists, the <em>tcache</em>, without merging them, because a program that freed a 32-byte block will probably ask for one again soon. Larger free blocks, and small ones later on, are merged with free neighbors so that small holes become one useful block. Merged, these three would be one 112-byte block. Right now they are three." },
     { lines: [14], ops: (H) => malloc(H, "t", 80), zoom: "t",
-      title: "A request none of the three could hold",
-      msg: "<span class=\"math\">8 + 80 = 88 → 96</span> bytes. None of the original blocks (32, 48, 32) was big enough, but the merged 112-byte block is. The 16 bytes left over are too small to be a block (minimum 32), so <code>t</code> gets all 112. <code>t == p</code>: <code>p</code> now points at <code>t</code>'s data." },
+      title: "112 bytes free, and none of it fits",
+      msg: "<span class=\"math\">8 + 80 = 88 → 96</span> bytes. No free list has a 96-byte block, and the three free pieces (32, 48, 32) are separate, so none can hold it even though 112 bytes are free in total. That is <b>fragmentation</b>. <code>malloc</code> carves the block from the <em>top</em> of the heap instead, moving it up into the gap below the stack." },
     { lines: [15], ops: (H) => malloc(H, "u", 200), zoom: null,
-      title: "No free block fits: the heap grows",
-      msg: "<span class=\"math\">8 + 200 = 208</span> bytes, and nothing on the free lists is that big. So <code>malloc</code> carves the block from the <em>top</em> of the heap, moving it up into the gap below the stack. When it runs out, it asks the kernel for more. A request of 128 KiB or more skips the heap entirely, gets its own mapping in the gap, and <code>free</code> hands it straight back to the kernel." },
+      title: "The heap grows again",
+      msg: "<span class=\"math\">8 + 200 = 208</span> bytes, and nothing on the free lists is that big. So it also comes from the top, right after <code>t</code>. When the heap runs out, it asks the kernel for more. A request of 128 KiB or more skips the heap entirely, gets its own mapping in the gap, and <code>free</code> hands it straight back to the kernel." },
   ];
 
   const STATES = [];
@@ -785,7 +785,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     else if (e.key === "r" || e.key === "R") restart();
   });
 
-  L.merge = true;
+  L.merge = false;
   setMode(0);
 })();
 </script>
